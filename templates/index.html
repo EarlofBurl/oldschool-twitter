@@ -125,13 +125,28 @@
         }
         .tweet-actions a { color: #8899A6; text-decoration: none; margin-right: 15px; }
         .loading { text-align: center; padding: 30px; color: #8899A6; }
-        .error { text-align: center; padding: 20px; color: #cc0000; }
+        .error { text-align: center; padding: 20px; color: #cc0000; background: #fff0f0; }
+        .success { text-align: center; padding: 10px; color: #008000; background: #f0fff0; margin-bottom: 10px; }
         .empty-state { text-align: center; padding: 40px 20px; color: #8899A6; }
         .empty-state h3 { margin-bottom: 10px; color: #333; }
         .retweet-indicator { color: #8899A6; font-size: 12px; margin-bottom: 4px; }
+        #status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+        }
+        #status.show { display: block; }
+        #status.error { background: #ffdddd; color: #cc0000; }
+        #status.success { background: #ddffdd; color: #008000; }
     </style>
 </head>
 <body>
+    <div id="status"></div>
     <div id="container">
         <div id="header">Oldschool Twitter Timeline</div>
         <div id="feed-form">
@@ -145,24 +160,16 @@
     </div>
 
     <script>
-        let timelineController;
-
-        async function fetchWithTimeout(url, options = {}, timeout = 8000) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-            try {
-                const res = await fetch(url, { ...options, signal: controller.signal });
-                clearTimeout(timeoutId);
-                return res;
-            } catch (e) {
-                clearTimeout(timeoutId);
-                throw e;
-            }
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'show ' + type;
+            setTimeout(() => el.className = '', 3000);
         }
 
         async function loadFeeds() {
             try {
-                const res = await fetchWithTimeout('/api/feeds', {}, 5000);
+                const res = await fetch('/api/feeds');
                 const feeds = await res.json();
                 const container = document.getElementById('feeds-list');
                 if (!feeds.length) {
@@ -174,7 +181,7 @@
                     return `<span class="feed-tag" onclick="removeFeed('${encodeURIComponent(url)}')" title="Klicken zum Entfernen">${name}</span>`;
                 }).join('');
             } catch (e) {
-                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Feeds laden fehlgeschlagen: ' + e.message + '</span>';
+                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Feeds laden fehlgeschlagen</span>';
             }
         }
 
@@ -183,38 +190,44 @@
             const url = input.value.trim();
             if (!url) return;
             try {
-                await fetch('/api/feeds', {
+                const res = await fetch('/api/feeds', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({url})
                 });
+                if (!res.ok) throw new Error('Server error');
                 input.value = '';
+                showStatus('Feed hinzugefügt!', 'success');
                 await loadFeeds();
                 await loadTimeline();
             } catch (e) {
-                alert('Feed hinzufügen fehlgeschlagen: ' + e.message);
+                showStatus('Fehler: ' + e.message, 'error');
             }
         }
 
         async function removeFeed(url) {
             if (!confirm('Feed entfernen?')) return;
             try {
-                await fetch(`/api/feeds/${url}`, {method: 'DELETE'});
+                const res = await fetch('/api/feeds', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: decodeURIComponent(url)})
+                });
+                if (!res.ok) throw new Error('Server error');
+                showStatus('Feed entfernt!', 'success');
                 await loadFeeds();
                 await loadTimeline();
             } catch (e) {
-                alert('Feed entfernen fehlgeschlagen');
+                showStatus('Fehler: ' + e.message, 'error');
             }
         }
 
         async function loadTimeline() {
-            if (timelineController) timelineController.abort();
             const container = document.getElementById('timeline');
             container.innerHTML = '<div class="loading">Lade Timeline...</div>';
             try {
-                if (timelineController) timelineController.abort();
-                timelineController = new AbortController();
-                const res = await fetch('/api/timeline', { signal: timelineController.signal });
+                const res = await fetch('/api/timeline');
+                if (!res.ok) throw new Error('Server error');
                 const items = await res.json();
                 if (!items.length) {
                     container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu.</div>';
@@ -245,7 +258,6 @@
                     `;
                 }).join('');
             } catch (e) {
-                if (e.name === 'AbortError') return;
                 container.innerHTML = '<div class="error">Fehler: ' + e.message + '</div>';
             }
         }

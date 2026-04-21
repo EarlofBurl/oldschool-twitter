@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
+from urllib.parse import unquote, quote
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
@@ -87,8 +88,10 @@ def add_feed():
     return jsonify({'feeds': feeds})
 
 
-@app.route('/api/feeds/<path:url>', methods=['DELETE'])
-def remove_feed(url):
+@app.route('/api/feeds', methods=['DELETE'])
+def remove_feed():
+    data = request.get_json()
+    url = data.get('url', '').strip()
     feeds = load_feeds()
     if url in feeds:
         feeds.remove(url)
