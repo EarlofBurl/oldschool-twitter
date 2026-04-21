@@ -3,6 +3,7 @@ import os
 import re
 import hashlib
 import time
+import logging
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
@@ -12,6 +13,9 @@ from urllib.parse import urljoin, urlparse
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
 COOKIE_CACHE = {}
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 REQUEST_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -53,19 +57,25 @@ def solve_anubis(html_content, base_url, session):
         html_content, re.DOTALL
     )
     if not preact_match:
-        return False
+        logger.warning("No preact_info found in challenge page")
+        return None
+
     try:
         preact_data = json.loads(preact_match.group(1))
     except json.JSONDecodeError:
-        return False
+        logger.warning("Failed to parse preact_info JSON")
+        return None
 
     challenge = preact_data.get('challenge', '')
     difficulty = preact_data.get('difficulty', 4)
     redir = preact_data.get('redir', '/')
 
+    logger.info(f"Solving Anubis challenge (difficulty={difficulty}) for {base_url}")
+
     result = hashlib.sha256(challenge.encode('utf-8')).hexdigest()
 
     wait_time = difficulty * 0.125 + 0.5
+    logger.info(f"Waiting {wait_time:.1f}s (difficulty={difficulty})")
     time.sleep(wait_time)
 
     if '?' in redir:
@@ -76,19 +86,31 @@ def solve_anubis(html_content, base_url, session):
     if not pass_url.startswith('http'):
         pass_url = urljoin(base_url, pass_url)
 
+    logger.info(f"Passing challenge: {pass_url}")
+
     try:
         resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=30, allow_redirects=True)
-        return True
-    except Exception:
-        return False
+        logger.info(f"Challenge response: status={resp.status_code}, content-type={resp.headers.get('Content-Type', '')}")
+
+        if '<html' in resp.text[:500].lower() and 'anubis' in resp.text.lower():
+            logger.warning("Challenge not solved - still getting challenge page after attempt")
+            return None
+
+        logger.info("Anubis challenge solved successfully!")
+        return resp
+    except Exception as e:
+        logger.error(f"Failed to solve Anubis challenge: {e}")
+        return None
 
 
 def fetch_with_anubis(url):
     domain = get_domain(url)
     session = requests.Session()
 
-    if domain in COOKIE_CACHE and COOKIE_CACHE[domain].get('expires', 0) > time.time():
-        for name, value in COOKIE_CACHE[domain]['cookies'].items():
+    cached = COOKIE_CACHE.get(domain)
+    if cached and cached.get('expires', 0) > time.time():
+        logger.info(f"Using cached cookies for {domain}")
+        for name, value in cached['cookies'].items():
             session.cookies.set(name, value, domain=urlparse(domain).netloc)
 
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
@@ -96,13 +118,19 @@ def fetch_with_anubis(url):
     is_challenge = '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower())
 
     if is_challenge:
-        solved = solve_anubis(resp.text, domain, session)
-        if solved:
+        logger.info(f"Anubis challenge detected for {url}")
+        challenge_resp = solve_anubis(resp.text, domain, session)
+        if challenge_resp is not None:
             COOKIE_CACHE[domain] = {
                 'cookies': {c.name: c.value for c in session.cookies},
                 'expires': time.time() + 3600
             }
+            if challenge_resp.headers.get('Content-Type', '').startswith('application/rss') or '<rss' in challenge_resp.text[:100]:
+                logger.info("Got RSS content directly from challenge redirect")
+                return challenge_resp, session
             resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+        else:
+            logger.warning(f"Failed to solve Anubis challenge for {url}")
 
     return resp, session
 
@@ -112,9 +140,14 @@ def fetch_feed_items(url):
         resp, session = fetch_with_anubis(url)
 
         if '<html' in resp.text[:500].lower():
+            logger.error(f"Got HTML instead of RSS for {url}")
             return []
 
         feed = feedparser.parse(resp.text)
+        if not feed.entries:
+            logger.warning(f"No entries in feed for {url}")
+            return []
+
         items = []
         for entry in feed.entries:
             date_str = entry.get('published', '')
@@ -149,8 +182,10 @@ def fetch_feed_items(url):
                 'is_retweet': is_retweet,
                 'rt_creator': rt_creator,
             })
+        logger.info(f"Fetched {len(items)} items from {url}")
         return items
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching {url}: {e}")
         return []
 
 
@@ -222,8 +257,8 @@ def proxy_pic():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()}})
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
