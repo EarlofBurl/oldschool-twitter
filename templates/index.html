@@ -12,49 +12,99 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
-        #container {
-            width: 560px;
-            margin: 0 auto;
-            background-color: white;
-            min-height: 100vh;
-            border-left: 1px solid #E1E8ED;
-            border-right: 1px solid #E1E8ED;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
         #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
             background-color: #5595BF;
-            padding: 12px 15px;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
             border-bottom: 2px solid #3B7BA8;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            padding: 0 20px;
+            height: 50px;
         }
-        #header .left { display: flex; align-items: center; }
-        #header .bird { font-size: 24px; margin-right: 8px; }
-        .header-btn {
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.4);
+        #header .left {
+            display: flex;
+            align-items: center;
             color: white;
-            padding: 6px 10px;
-            border-radius: 3px;
-            font-size: 12px;
+            font-size: 18px;
+            font-weight: bold;
             cursor: pointer;
-            white-space: nowrap;
-            margin-left: 6px;
         }
-        .header-btn:hover { background: rgba(255,255,255,0.3); }
-        .header-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #header .bird { font-size: 26px; margin-right: 10px; }
+        #header .nav-btn {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 3px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        #header .nav-btn:hover { background: rgba(255,255,255,0.3); }
+        #header .nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #header .nav-btn.active { background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.6); }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spinning { animation: spin 1s linear infinite; display: inline-block; }
-        #feed-form {
-            background-color: #F5F8FA;
+        #main {
+            margin-top: 50px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            background-color: white;
+            min-height: calc(100vh - 50px);
+            border-left: 1px solid #E1E8ED;
+            border-right: 1px solid #E1E8ED;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+
+        /* --- Sidebar / Feeds Page --- */
+        #sidebar {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            bottom: 0;
+            width: 300px;
+            background: #F5F8FA;
+            border-right: 1px solid #E1E8ED;
+            z-index: 90;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        #sidebar.open { transform: translateX(0); }
+        #sidebar .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #E1E8ED;
+            font-weight: bold;
+            font-size: 15px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #sidebar .sidebar-header .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #8899A6;
+        }
+        #sidebar .sidebar-header .close-btn:hover { color: #333; }
+        #sidebar .feed-add {
             padding: 12px 15px;
             border-bottom: 1px solid #E1E8ED;
         }
-        #feed-form input[type="text"] {
+        #sidebar .feed-add input[type="text"] {
             width: 100%;
             padding: 8px 10px;
             border: 1px solid #E1E8ED;
@@ -62,11 +112,11 @@
             font-size: 13px;
             margin-bottom: 6px;
         }
-        #feed-form input[type="text"]:focus {
+        #sidebar .feed-add input[type="text"]:focus {
             outline: none;
             border-color: #5595BF;
         }
-        #feed-form button {
+        #sidebar .feed-add button {
             background-color: #5595BF;
             color: white;
             border: 1px solid #3B7BA8;
@@ -74,42 +124,78 @@
             border-radius: 3px;
             font-size: 13px;
             cursor: pointer;
+            width: 100%;
         }
-        #feed-form button:hover { background-color: #3B7BA8; }
-        .hint { font-size: 11px; color: #8899A6; margin-top: 4px; }
-        #feeds-list {
-            padding: 8px 15px;
-            font-size: 12px;
-            border-bottom: 1px solid #E1E8ED;
-            background: #F5F8FA;
-        }
-        #feeds-list .feed-tag {
-            display: inline-block;
-            background-color: #E1E8ED;
-            color: #5595BF;
-            padding: 3px 8px;
-            border-radius: 12px;
-            margin: 2px 3px 2px 0;
-            cursor: pointer;
+        #sidebar .feed-add button:hover { background-color: #3B7BA8; }
+        #sidebar .feed-hint {
             font-size: 11px;
+            color: #8899A6;
+            margin-top: 6px;
         }
-        #feeds-list .feed-tag:hover {
-            background-color: #5595BF;
-            color: white;
+        #sidebar .feed-list {
+            flex: 1;
+            overflow-y: auto;
         }
+        #sidebar .feed-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #E1E8ED;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: default;
+        }
+        #sidebar .feed-item:hover { background: #E1E8ED; }
+        #sidebar .feed-item .feed-name {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+        #sidebar .feed-item .feed-url {
+            font-size: 11px;
+            color: #8899A6;
+            display: block;
+            margin-top: 2px;
+            word-break: break-all;
+        }
+        #sidebar .feed-item .feed-delete {
+            background: none;
+            border: none;
+            color: #8899A6;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        #sidebar .feed-item .feed-delete:hover { color: #C62828; background: #FFEBEE; }
+        .sidebar-overlay {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 85;
+            display: none;
+        }
+        .sidebar-overlay.open { display: block; }
+
+        /* --- Status Bar --- */
         #status-bar {
             background: #E1E8ED;
-            padding: 6px 15px;
+            padding: 6px 20px;
             font-size: 11px;
             color: #8899A6;
             border-bottom: 1px solid #E1E8ED;
             display: flex;
             justify-content: space-between;
         }
+
+        /* --- Timeline --- */
         .timeline { background-color: white; }
         .tweet {
             border-bottom: 1px solid #E1E8ED;
-            padding: 10px 15px;
+            padding: 12px 20px;
         }
         .tweet:hover { background-color: #F9FBFC; }
         .tweet-avatar {
@@ -117,7 +203,7 @@
             height: 48px;
             border-radius: 5px;
             float: left;
-            margin-right: 10px;
+            margin-right: 12px;
             background-color: #E1E8ED;
         }
         .tweet-header {
@@ -129,9 +215,9 @@
         .tweet-username { color: #8899A6; font-size: 13px; margin-left: 4px; }
         .tweet-time { color: #8899A6; font-size: 12px; margin-left: auto; }
         .tweet-body {
-            margin-left: 58px;
+            margin-left: 60px;
             font-size: 14px;
-            line-height: 1.4;
+            line-height: 1.5;
             color: #333;
         }
         .tweet-body p { margin-bottom: 6px; }
@@ -144,15 +230,15 @@
         .tweet-body a:hover { text-decoration: underline; }
         .tweet-body blockquote {
             border-left: 3px solid #E1E8ED;
-            padding: 8px 10px;
-            margin: 6px 0;
+            padding: 8px 12px;
+            margin: 8px 0;
             color: #66757F;
             background: #F5F8FA;
             border-radius: 0 5px 5px 0;
         }
         .tweet-body blockquote b { color: #333; }
         .tweet-actions {
-            margin-left: 58px;
+            margin-left: 60px;
             margin-top: 6px;
             font-size: 12px;
             color: #8899A6;
@@ -163,19 +249,19 @@
             color: #8899A6;
             font-size: 12px;
             margin-bottom: 4px;
-            margin-left: 58px;
+            margin-left: 60px;
         }
-        .loading { text-align: center; padding: 30px; color: #8899A6; }
-        .empty-state { text-align: center; padding: 40px 20px; color: #8899A6; }
-        .empty-state h3 { margin-bottom: 8px; color: #333; }
+        .loading { text-align: center; padding: 40px; color: #8899A6; }
+        .empty-state { text-align: center; padding: 50px 20px; color: #8899A6; }
+        .empty-state h3 { margin-bottom: 10px; color: #333; font-size: 16px; }
         #toast {
             position: fixed;
-            top: 10px;
+            top: 60px;
             right: 10px;
             padding: 10px 20px;
             border-radius: 5px;
             font-size: 13px;
-            z-index: 1000;
+            z-index: 200;
             display: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             max-width: 400px;
@@ -187,20 +273,33 @@
 </head>
 <body>
     <div id="toast"></div>
-    <div id="container">
-        <div id="header">
-            <div class="left"><span class="bird">&#128038;</span> Oldschool Twitter</div>
-            <div>
-                <button class="header-btn" id="refresh-btn">&#8635; Aktualisieren</button>
-                <button class="header-btn" id="hard-refresh-btn">&#8635; Force</button>
-            </div>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div id="header">
+        <div class="left" onclick="toggleSidebar()">
+            <span class="bird">&#128038;</span> Oldschool Twitter
         </div>
-        <div id="feed-form">
-            <input type="text" id="feed-url" placeholder="Nitter Profil-URL (z.B. https://nitter.tiekoetter.com/BeckyLynchWWE)">
-            <button id="add-btn">Feed hinzufügen</button>
-            <div class="hint">RSS-URLs (mit /rss am Ende) oder Profil-URLs werden unterstutzt. Min. 10 Min zwischen Aktualisierungen.</div>
+        <div style="display:flex;align-items:center;">
+            <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776; Feeds</button>
+            <button class="nav-btn" id="refresh-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
+            <button class="nav-btn" id="hard-refresh-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
         </div>
-        <div id="feeds-list"></div>
+    </div>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            Abonnierte Feeds
+            <button class="close-btn" onclick="toggleSidebar()">&times;</button>
+        </div>
+        <div class="feed-add">
+            <input type="text" id="feed-url" placeholder="Nitter Profil-URL oder RSS-URL">
+            <button id="add-btn" onclick="addFeed()">Feed hinzufügen</button>
+            <div class="feed-hint">Profil: https://nitter.net/user &nbsp;|&nbsp; RSS: https://nitter.net/user/rss<br>Min. 10 Min zwischen Aktualisierungen.</div>
+        </div>
+        <div class="feed-list" id="feed-list"></div>
+    </div>
+
+    <div id="main">
         <div id="status-bar">
             <span id="tweet-count">0 Tweets geladen</span>
             <span id="last-refresh">Nie aktualisiert</span>
@@ -214,6 +313,19 @@
         let currentPage = 1;
         let loading = false;
         let hasMore = false;
+        let sidebarOpen = false;
+
+        function toggleSidebar() {
+            sidebarOpen = !sidebarOpen;
+            document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+            document.getElementById('sidebar-overlay').classList.toggle('open', sidebarOpen);
+            document.getElementById('feeds-btn').classList.toggle('active', sidebarOpen);
+            if (sidebarOpen) loadFeeds();
+        }
+
+        document.getElementById('sidebar-overlay').addEventListener('click', () => {
+            if (sidebarOpen) toggleSidebar();
+        });
 
         function showToast(msg, type) {
             const el = document.getElementById('toast');
@@ -226,18 +338,26 @@
             try {
                 const res = await fetch('/api/feeds');
                 const feeds = await res.json();
-                const container = document.getElementById('feeds-list');
+                const container = document.getElementById('feed-list');
                 if (!feeds.length) {
-                    container.innerHTML = '<span style="color:#8899A6;font-size:12px">Keine Feeds - füge einen hinzu</span>';
+                    container.innerHTML = '<div style="padding:20px;color:#8899A6;text-align:center;font-size:13px">Keine Feeds abonniert.<br>Füge einen hinzu.</div>';
                     return;
                 }
                 container.innerHTML = feeds.map(url => {
                     const parts = url.split('/').filter(Boolean);
                     const name = parts[parts.length - 1] === 'rss' ? parts[parts.length - 2] : parts[parts.length - 1];
-                    return `<span class="feed-tag" onclick="removeFeed('${encodeURIComponent(url)}')" title="${url} - Klicken zum Entfernen">@${name}</span>`;
+                    return `
+                        <div class="feed-item">
+                            <div>
+                                <span class="feed-name">@${name}</span>
+                                <span class="feed-url">${url}</span>
+                            </div>
+                            <button class="feed-delete" onclick="removeFeed('${encodeURIComponent(url)}')" title="Feed entfernen">&times;</button>
+                        </div>
+                    `;
                 }).join('');
             } catch (e) {
-                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Fehler beim Laden</span>';
+                document.getElementById('feed-list').innerHTML = '<div style="padding:20px;color:#cc0000">Fehler beim Laden</div>';
             }
         }
 
@@ -254,6 +374,7 @@
                 if (!res.ok) throw new Error('Server error');
                 input.value = '';
                 showToast('Feed hinzugefügt! Aktualisiere...', 'success');
+                await loadFeeds();
                 await refreshTimeline(false);
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
@@ -261,15 +382,18 @@
         }
 
         async function removeFeed(url) {
-            if (!confirm('Feed entfernen?')) return;
+            if (!confirm('Feed und alle zugehörigen Tweets/Bilder entfernen?')) return;
             try {
-                await fetch('/api/feeds', {
+                const res = await fetch('/api/feeds', {
                     method: 'DELETE',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({url: decodeURIComponent(url)})
                 });
-                showToast('Feed entfernt!', 'success');
+                const data = await res.json();
+                showToast(`Feed entfernt! (${data.deleted_images || 0} Bilder gelöscht, ${data.remaining_tweets || 0} Tweets übrig)`, 'success');
                 await loadFeeds();
+                currentPage = 1;
+                await loadTimeline();
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
             }
@@ -333,8 +457,7 @@
                 if (!append) {
                     container.innerHTML = html;
                 } else {
-                    container.insertAdjacentHTML('beforeend',
-                        '<div style="border-top:2px solid #5595BF;margin:5px 15px;"></div>' + html);
+                    container.insertAdjacentHTML('beforeend', html);
                 }
             } catch (e) {
                 if (!append) {
@@ -389,14 +512,10 @@
             }
         });
 
-        document.getElementById('refresh-btn').addEventListener('click', () => refreshTimeline(false));
-        document.getElementById('hard-refresh-btn').addEventListener('click', () => refreshTimeline(true));
-        document.getElementById('add-btn').addEventListener('click', addFeed);
         document.getElementById('feed-url').addEventListener('keypress', e => {
             if (e.key === 'Enter') addFeed();
         });
 
-        loadFeeds();
         loadTimeline();
         fetch('/api/timeline').then(r => r.json()).then(data => {
             if (data.total === 0) refreshTimeline(false);
