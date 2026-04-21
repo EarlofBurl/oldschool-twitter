@@ -40,9 +40,10 @@
         .profile-avatar {
             width: 80px; height: 80px; border-radius: 8px; border: 4px solid white;
             position: absolute; top: -50px; left: 20px; background: #E1E8ED;
+            object-fit: cover;
         }
         .profile-name {
-            margin-top: 38px; font-size: 20px; font-weight: bold; color: #333;
+            margin-top: 48px; font-size: 20px; font-weight: bold; color: #333;
         }
         .profile-handle { color: #8899A6; font-size: 14px; margin-top: 2px; }
         .profile-source { color: #8899A6; font-size: 12px; margin-top: 6px; word-break: break-all; }
@@ -91,14 +92,15 @@
         .img-gallery.g3 .gi:first-child { grid-column: 1 / -1; }
         .img-gallery.g4 .gi:first-child { grid-column: 1 / -1; }
         .img-gallery.g5,.img-gallery.g6,.img-gallery.g7,.img-gallery.g8,.img-gallery.g9 { grid-template-columns: 1fr 1fr 1fr; }
-        .gi { position: relative; cursor: pointer; overflow: hidden; background: #E1E8ED; }
+        .gi { position: relative; cursor: pointer; overflow: hidden; background: #1a1a1a; }
         .gi img { width: 100%; display: block; transition: filter 0.15s; }
         .gi:hover img { filter: brightness(0.85); }
         .gi.more-overlay::after { content: attr(data-more); position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; }
         .gi.video-thumb::before { content: '\25B6'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.6); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 1; pointer-events: none; }
+        .gi.video-thumb { text-decoration: none; color: inherit; display: block; }
         .img-gallery.g1 .gi { max-height: 400px; }
-        .img-gallery.g1 .gi img { max-height: 400px; object-fit: contain; background: #000; }
-        .img-gallery:not(.g1) .gi img { height: 100%; min-height: 120px; max-height: 220px; object-fit: cover; }
+        .img-gallery.g1 .gi img { max-height: 400px; object-fit: contain; }
+        .img-gallery:not(.g1) .gi img { height: 100%; min-height: 120px; max-height: 220px; object-fit: contain; }
         .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox.open { display: flex; }
         .lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 4px; }
@@ -243,8 +245,21 @@
 
         function extractImgs(desc){
             var tmp=document.createElement('div');tmp.innerHTML=desc;
-            var imgs=[];tmp.querySelectorAll('img').forEach(function(img){var s=img.getAttribute('src');if(s)imgs.push(s);});
-            var vids=[];tmp.querySelectorAll('a').forEach(function(a){var t=a.textContent.trim().toLowerCase();var img=a.querySelector('img');if((t.includes('video')||t.includes('gif'))&&img)vids.push({src:img.getAttribute('src'),isVideo:true});});
+            var vidSrcSet=new Set();
+            var vids=[];
+            tmp.querySelectorAll('a').forEach(function(a){
+                var t=a.textContent.trim().toLowerCase();
+                var img=a.querySelector('img');
+                if((t.includes('video')||t.includes('gif'))&&img){
+                    var s=img.getAttribute('src');
+                    if(s){vids.push({src:s,isVideo:true});vidSrcSet.add(s);}
+                }
+            });
+            var imgs=[];
+            tmp.querySelectorAll('img').forEach(function(img){
+                var s=img.getAttribute('src');
+                if(s&&!vidSrcSet.has(s))imgs.push(s);
+            });
             return {imgs:imgs,vids:vids};
         }
 
@@ -268,21 +283,23 @@
             } else {
                 avatarHtml='<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">'+esc(username.charAt(0).toUpperCase())+'</div>';
             }
-            var allImgs=ei.imgs.concat(ei.vids.map(function(v){return v.src;}));
+            var allItems=ei.imgs.map(function(s){return {src:s,isVideo:false};}).concat(ei.vids);
             var galleryHtml='';
-            if(allImgs.length>0){
-                var cnt=allImgs.length;
+            if(allItems.length>0){
+                var cnt=allItems.length;
                 var gc=cnt<=9?'g'+cnt:'g9';
                 var maxS=9;
-                var show=allImgs.slice(0,maxS);
+                var show=allItems.slice(0,maxS);
                 var hasMoreCnt=cnt>maxS;
-                var vidSet=new Set(ei.vids.map(function(v){return v.src;}));
-                var itemsHtml=show.map(function(src,i){
-                    var isV=vidSet.has(src);
+                var itemsHtml=show.map(function(it,i){
+                    var isV=it.isVideo;
                     var isLast=i===maxS-1&&hasMoreCnt;
                     var more=isLast?'+'+(cnt-maxS+1):'';
                     var cls='gi'+(isV?' video-thumb':'')+(isLast?' more-overlay':'');
-                    return '<div class="'+cls+'" data-more="'+more+'" onclick="openLB(\''+esc(tid)+'\','+i+')"><img src="'+src+'" alt="" loading="lazy"></div>';
+                    if(isV){
+                        return '<a href="'+esc(item.link)+'" target="_blank" class="'+cls+'" data-more="'+more+'"><img src="'+it.src+'" alt="Video" loading="lazy"></a>';
+                    }
+                    return '<div class="'+cls+'" data-more="'+more+'" onclick="openLB(\''+esc(tid)+'\','+i+')"><img src="'+it.src+'" alt="" loading="lazy"></div>';
                 }).join('');
                 galleryHtml='<div class="img-gallery '+gc+'" data-gallery="'+esc(tid)+'">'+itemsHtml+'</div>';
             }
