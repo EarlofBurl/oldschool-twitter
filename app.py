@@ -576,12 +576,15 @@ def get_hashtags():
     feed_url = request.args.get('feed_url', '').strip()
     tweets = load_tweets()
     tag_counts = {}
+    four_days_ago = time.time() - 4 * 86400
     for tweet in tweets.values():
         if feed_url and tweet.get('feed_link') != feed_url:
             continue
+        if tweet.get('timestamp', 0) < four_days_ago:
+            continue
         for tag in extract_hashtags(tweet.get('description', '') + ' ' + tweet.get('title', '')):
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
-    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     return jsonify({'hashtags': [{'tag': t, 'count': c} for t, c in sorted_tags]})
 
 

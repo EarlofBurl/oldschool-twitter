@@ -64,9 +64,9 @@
         .sidebar-overlay.open { display: block; }
 
         /* --- Layout --- */
-        #layout { display: flex; margin-top: 50px; min-height: calc(100vh - 50px); }
-        #left-col { width: 260px; min-width: 260px; position: sticky; top: 50px; height: calc(100vh - 50px); padding: 15px; overflow-y: auto; }
-        #center-col { flex: 1; max-width: 800px; background-color: white; border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); min-height: calc(100vh - 50px); }
+        #layout { display: flex; margin-top: 50px; min-height: calc(100vh - 50px); justify-content: center; }
+        #left-col { width: 260px; min-width: 260px; position: sticky; top: 50px; height: calc(100vh - 50px); padding: 15px; padding-right: 30px; overflow-y: auto; flex-shrink: 0; }
+        #center-col { width: 600px; min-width: 400px; max-width: 800px; background-color: white; border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); min-height: calc(100vh - 50px); }
 
         /* --- Trends (left) --- */
         .trends-panel { background: #F5F8FA; border-radius: 12px; border: 1px solid #E1E8ED; overflow: hidden; }
