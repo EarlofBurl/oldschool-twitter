@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Bird Watch</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' fill='%235595BF'/%3E%3C/svg%3E">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background-color: #C6E2E8; min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .login-card { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 40px; width: 380px; max-width: 90vw; }
+        .login-bird { text-align: center; font-size: 48px; margin-bottom: 10px; }
+        .login-title { text-align: center; font-size: 24px; font-weight: bold; color: #333; margin-bottom: 6px; }
+        .login-subtitle { text-align: center; font-size: 13px; color: #8899A6; margin-bottom: 25px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: bold; color: #333; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 10px 12px; border: 1px solid #E1E8ED; border-radius: 6px; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #5595BF; }
+        .login-btn { width: 100%; background-color: #5595BF; color: white; border: 1px solid #3B7BA8; padding: 10px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .login-btn:hover { background-color: #3B7BA8; }
+        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .login-error { color: #C62828; font-size: 13px; text-align: center; margin-bottom: 12px; display: none; }
+        .login-error.show { display: block; }
+        .toggle-mode { text-align: center; margin-top: 16px; font-size: 13px; color: #8899A6; }
+        .toggle-mode a { color: #5595BF; cursor: pointer; text-decoration: none; }
+        .toggle-mode a:hover { text-decoration: underline; }
+        #register-form { display: none; }
+        #register-form.show { display: block; }
+        #login-form.hide { display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-bird">&#128038;</div>
+        <div class="login-title">Bird Watch</div>
+        <div class="login-subtitle">Melde dich an, um deine Timeline zu sehen.</div>
+        <div class="login-error" id="error"></div>
+        <div id="login-form">
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="username" onkeypress="if(event.key==='Enter')doLogin()">
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="password" onkeypress="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="login-btn" onclick="doLogin()">Anmelden</button>
+            <div class="toggle-mode">Noch kein Account? <a onclick="toggleMode()">Registrieren</a></div>
+        </div>
+        <div id="register-form">
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="reg-username" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="reg-password" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <div class="form-group">
+                <label>Passwort wiederholen</label>
+                <input type="password" id="reg-password2" onkeypress="if(event.key==='Enter')doRegister()">
+            </div>
+            <button class="login-btn" onclick="doRegister()">Registrieren</button>
+            <div class="toggle-mode">Schon ein Account? <a onclick="toggleMode()">Anmelden</a></div>
+        </div>
+    </div>
+    <script>
+        function toggleMode(){
+            document.getElementById('login-form').classList.toggle('hide');
+            document.getElementById('register-form').classList.toggle('show');
+            document.getElementById('error').classList.remove('show');
+        }
+
+        function showError(msg){
+            var el=document.getElementById('error');
+            el.textContent=msg;
+            el.classList.add('show');
+        }
+
+        async function doLogin(){
+            var username=document.getElementById('username').value.trim();
+            var password=document.getElementById('password').value;
+            if(!username||!password){showError('Bitte Benutzername und Passwort eingeben.');return;}
+            try{
+                var res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})});
+                var data=await res.json();
+                if(res.ok){window.location.href='/';}
+                else{showError(data.error||'Anmeldung fehlgeschlagen.');}
+            }catch(e){showError('Verbindungsfehler.');}
+        }
+
+        async function doRegister(){
+            var username=document.getElementById('reg-username').value.trim();
+            var password=document.getElementById('reg-password').value;
+            var password2=document.getElementById('reg-password2').value;
+            if(!username||!password){showError('Bitte Benutzername und Passwort eingeben.');return;}
+            if(password!==password2){showError('Passwörter stimmen nicht überein.');return;}
+            try{
+                var res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})});
+                var data=await res.json();
+                if(res.ok){window.location.href='/';}
+                else{showError(data.error||'Registrierung fehlgeschlagen.');}
+            }catch(e){showError('Verbindungsfehler.');}
+        }
+    </script>
+</body>
+</html>

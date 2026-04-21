@@ -6,17 +6,20 @@ import time
 import logging
 from datetime import datetime
 from urllib.parse import quote, urlparse, urljoin
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = os.urandom(32).hex()
 DATA_DIR = '/app/data'
 FEEDS_FILE = os.path.join(DATA_DIR, 'feeds.json')
 TWEETS_FILE = os.path.join(DATA_DIR, 'tweets.json')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 CACHE_FILE = os.path.join(DATA_DIR, 'cache_meta.json')
+USERS_FILE = os.path.join(DATA_DIR, 'users.json')
 COOKIE_CACHE = {}
 MIN_REFRESH_INTERVAL = 600
 
@@ -32,6 +35,9 @@ if not os.path.exists(TWEETS_FILE):
 if not os.path.exists(CACHE_FILE):
     with open(CACHE_FILE, 'w') as f:
         json.dump({}, f)
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, 'w') as f:
+        json.dump({'manuel': generate_password_hash('wrestlemania!2026')}, f)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,6 +90,67 @@ def load_cache_meta():
 
 def save_cache_meta(meta):
     save_json(CACHE_FILE, meta)
+
+
+def load_users():
+    return load_json(USERS_FILE, {})
+
+
+def save_users(users):
+    save_json(USERS_FILE, users)
+
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Not authenticated'}), 401
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/login', methods=['GET'])
+def login_page():
+    if 'user' in session:
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    users = load_users()
+    if username in users and check_password_hash(users[username], password):
+        session['user'] = username
+        return jsonify({'success': True, 'user': username})
+    return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop('user', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password or len(username) < 2:
+        return jsonify({'error': 'Benutzername und Passwort erforderlich'}), 400
+    users = load_users()
+    if username in users:
+        return jsonify({'error': 'Benutzername bereits vergeben'}), 400
+    users[username] = generate_password_hash(password)
+    save_users(users)
+    session['user'] = username
+    return jsonify({'success': True, 'user': username})
 
 
 def solve_anubis(html_content, base_url, original_path, session):
@@ -572,6 +639,7 @@ def extract_hashtags(text):
 
 
 @app.route('/api/hashtags')
+@login_required
 def get_hashtags():
     feed_url = request.args.get('feed_url', '').strip()
     tweets = load_tweets()
@@ -589,11 +657,13 @@ def get_hashtags():
 
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 
 @app.route('/profile')
+@login_required
 def profile():
     return render_template('profile.html')
 
@@ -604,11 +674,13 @@ def serve_image(filename):
 
 
 @app.route('/api/feeds', methods=['GET'])
+@login_required
 def get_feeds():
     return jsonify(load_feeds())
 
 
 @app.route('/api/feeds/profiles', methods=['GET'])
+@login_required
 def get_feed_profiles():
     feeds = load_feeds()
     tweets = load_tweets()
@@ -637,6 +709,7 @@ def get_feed_profiles():
 
 
 @app.route('/api/search')
+@login_required
 def search():
     q = request.args.get('q', '').strip().lower()
     if not q:
@@ -678,6 +751,7 @@ def search():
 
 
 @app.route('/api/profile/<path:feed_url>')
+@login_required
 def get_profile(feed_url):
     if not feed_url.startswith('http'):
         feed_url = 'https://' + feed_url
@@ -724,6 +798,7 @@ def get_profile(feed_url):
 
 
 @app.route('/api/feeds', methods=['POST'])
+@login_required
 def add_feed():
     data = request.get_json()
     url = data.get('url', '').strip()
@@ -739,6 +814,7 @@ def add_feed():
 
 
 @app.route('/api/feeds', methods=['DELETE'])
+@login_required
 def remove_feed():
     data = request.get_json()
     url = data.get('url', '').strip()
@@ -753,6 +829,7 @@ def remove_feed():
 
 
 @app.route('/api/refresh', methods=['POST'])
+@login_required
 def refresh():
     force = request.args.get('force', '0') == '1'
     if force:
@@ -768,6 +845,7 @@ def refresh():
 
 
 @app.route('/api/timeline', methods=['GET'])
+@login_required
 def get_timeline():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -795,6 +873,7 @@ def get_timeline():
 
 
 @app.route('/api/debug/<path:url>')
+@login_required
 def debug_fetch(url):
     if not url.startswith('http'):
         url = 'https://' + url

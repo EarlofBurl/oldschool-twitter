@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profil - Oldschool Twitter</title>
+    <title>Profil - Bird Watch</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' fill='%235595BF'/%3E%3C/svg%3E">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -129,10 +129,11 @@
     </div>
     <div id="header">
         <div class="left" onclick="window.location.href='/'">
-            <span class="bird">&#128038;</span> Oldschool Twitter
+            <span class="bird">&#128038;</span> Bird Watch
         </div>
         <div style="display:flex;align-items:center;">
             <button class="nav-btn" onclick="window.location.href='/'">&#8592; Timeline</button>
+            <button class="nav-btn" onclick="doLogout()">Abmelden</button>
         </div>
     </div>
     <div id="main">
@@ -182,6 +183,10 @@
 
         function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;setTimeout(function(){el.className='';},5000);}
 
+        function doLogout(){
+            fetch('/api/logout',{method:'POST'}).then(function(){window.location.href='/login';});
+        }
+
         function loadHashtags(){
             fetch('/api/hashtags?feed_url='+encodeURIComponent(feedUrl)).then(function(r){return r.json();}).then(function(data){
                 var tags=data.hashtags||[];
@@ -219,7 +224,7 @@
                 var res=await fetch('/api/profile/'+encodeURIComponent(feedUrl));
                 var data=await res.json();
                 profileData=data;
-                document.title=(data.creator||data.feed_title)+' - Oldschool Twitter';
+                document.title=(data.creator||data.feed_title)+' - Bird Watch';
                 var headerEl=document.getElementById('profile-header');
                 var avatarHtml;
                 if(data.profile_image){
@@ -251,6 +256,7 @@
                 var url='/api/profile/'+encodeURIComponent(feedUrl)+'?page='+currentPage+'&per_page=20';
                 if(activeTag) url+='&hashtag='+encodeURIComponent(activeTag);
                 var res=await fetch(url);
+                if(res.status===401){window.location.href='/login';return;}
                 var data=await res.json();
                 var items=data.items||[];
                 hasMore=data.has_more;

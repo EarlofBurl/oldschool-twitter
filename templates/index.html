@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oldschool Twitter Timeline</title>
+    <title>Bird Watch</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' fill='%235595BF'/%3E%3C/svg%3E">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -162,13 +162,14 @@
 
     <div id="header">
         <div class="left" onclick="location.href='/'">
-            <span class="bird">&#128038;</span> Oldschool Twitter
+            <span class="bird">&#128038;</span> Bird Watch
         </div>
         <div class="header-spacer"></div>
         <button class="nav-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
         <button class="nav-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
         <button class="nav-btn" onclick="toggleSearch()">&#128269;</button>
         <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776;</button>
+        <button class="nav-btn" onclick="doLogout()">Abmelden</button>
     </div>
 
     <div id="search-bar">
@@ -297,6 +298,10 @@ function clearTagFilter(){
 
 function goProfile(url){location.href='/profile?feed='+url;}
 
+function doLogout(){
+    fetch('/api/logout',{method:'POST'}).then(function(){window.location.href='/login';});
+}
+
 function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;setTimeout(function(){el.className='';},5000);}
 
 async function loadFeeds(){
@@ -359,7 +364,9 @@ async function loadTimeline(append){
     try{
         var url='/api/timeline?page='+currentPage+'&per_page=20';
         if(activeTag) url+='&hashtag='+encodeURIComponent(activeTag);
-        var data=await(await fetch(url)).json();
+        var res=await fetch(url);
+        if(res.status===401){window.location.href='/login';return;}
+        var data=await res.json();
         var items=data.items||[];
         hasMore=data.has_more;
         document.getElementById('tweet-count').textContent=data.total+' Tweets';
