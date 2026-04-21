@@ -1,12 +1,14 @@
 import json
 import os
 import re
+import hmac
 import hashlib
 import time
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
 import requests
+from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
@@ -41,54 +43,48 @@ def parse_date(date_str):
     return datetime.now()
 
 
-def solve_anubis_challenge(html_content, base_url, session):
-    challenge_match = re.search(r'data-challenge="([^"]+)"', html_content)
-    if not challenge_match:
-        challenge_match = re.search(r'"challenge"\s*:\s*"([^"]+)"', html_content)
-    if not challenge_match:
+def get_domain(url):
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def solve_anubis(html_content, base_url, session):
+    preact_match = re.search(r'<script id="preact_info" type="application/json">(.*?)</script>', html_content, re.DOTALL)
+    if not preact_match:
         return None
 
-    challenge = challenge_match.group(1)
+    try:
+        preact_data = json.loads(preact_match.group(1))
+    except json.JSONDecodeError:
+        return None
 
-    difficulty_match = re.search(r'data-difficulty="(\d+)"', html_content)
-    if not difficulty_match:
-        difficulty_match = re.search(r'"difficulty"\s*:\s*(\d+)', html_content)
-    difficulty = int(difficulty_match.group(1)) if difficulty_match else 5
+    challenge = preact_data.get('challenge', '')
+    difficulty = preact_data.get('difficulty', 4)
+    redir = preact_data.get('redir', '/')
 
-    nonce = 0
-    target_prefix = '0' * difficulty
-    while True:
-        hash_input = f"{challenge}{nonce}".encode('utf-8')
-        hash_result = hashlib.sha256(hash_input).hexdigest()
-        if hash_result.startswith(target_prefix):
-            break
-        nonce += 1
-        if nonce > 5000000:
-            return None
+    result = hmac.new(b'', challenge.encode(), hashlib.sha256).hexdigest()
+
+    wait_time = difficulty * 0.125 + 0.5
+    time.sleep(wait_time)
+
+    if '?' in redir:
+        pass_url = f"{redir}&result={result}"
+    else:
+        pass_url = f"{redir}?result={result}"
+
+    if not pass_url.startswith('http'):
+        pass_url = urljoin(base_url, pass_url)
 
     try:
-        api_url = base_url.rstrip('/') + '/.within.website/x/anubis/api/pass-challenge'
-        resp = session.post(api_url, data={
-            'challenge': challenge,
-            'nonce': nonce,
-            'redir': '/rss' if '/rss' in base_url else base_url.split('.com')[1] if '.com' in base_url else '/'
-        }, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+        resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
         return dict(session.cookies)
     except Exception:
         return None
 
 
-def get_domain(url):
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    return f"{parsed.scheme}://{parsed.netloc}"
-
-
-def fetch_with_anubis_bypass(url, session=None):
-    if session is None:
-        session = requests.Session()
-
+def fetch_with_anubis(url):
     domain = get_domain(url)
+    session = requests.Session()
 
     if domain in COOKIE_CACHE and COOKIE_CACHE[domain].get('expires', 0) > time.time():
         session.cookies.update(COOKIE_CACHE[domain]['cookies'])
@@ -96,7 +92,7 @@ def fetch_with_anubis_bypass(url, session=None):
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
 
     if '<html' in resp.text[:500].lower() and ('not a bot' in resp.text.lower() or 'anubis' in resp.text.lower()):
-        cookies = solve_anubis_challenge(resp.text, domain, session)
+        cookies = solve_anubis(resp.text, domain, session)
         if cookies:
             COOKIE_CACHE[domain] = {
                 'cookies': cookies,
@@ -109,7 +105,7 @@ def fetch_with_anubis_bypass(url, session=None):
 
 def fetch_feed_items(url):
     try:
-        resp, session = fetch_with_anubis_bypass(url)
+        resp, session = fetch_with_anubis(url)
 
         if '<html' in resp.text[:500].lower():
             return []
@@ -140,7 +136,7 @@ def fetch_feed_items(url):
                 'feed_link': feed.feed.get('link', url),
             })
         return items
-    except Exception as e:
+    except Exception:
         return []
 
 
@@ -201,7 +197,7 @@ def get_timeline():
 def test_feed():
     url = request.args.get('url', 'https://nitter.privacyredirect.com/BeckyLynchWWE/rss')
     try:
-        resp, session = fetch_with_anubis_bypass(url)
+        resp, session = fetch_with_anubis(url)
         is_html = '<html' in resp.text[:500].lower()
         feed = feedparser.parse(resp.text)
         return jsonify({
@@ -211,7 +207,7 @@ def test_feed():
             'is_html': is_html,
             'entries_count': len(feed.entries),
             'feed_title': feed.feed.get('title', 'N/A'),
-            'bozo': feed.bozo,
+            'cookies': dict(session.cookies),
             'raw_snippet': resp.text[:500],
         })
     except Exception as e:
