@@ -7,7 +7,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
 import requests
-from urllib.parse import urljoin, urlparse, urlencode
+from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
@@ -54,7 +54,6 @@ def solve_anubis(html_content, base_url, session):
     )
     if not preact_match:
         return False
-
     try:
         preact_data = json.loads(preact_match.group(1))
     except json.JSONDecodeError:
@@ -94,9 +93,7 @@ def fetch_with_anubis(url):
 
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
 
-    is_challenge = '<html' in resp.text[:500].lower() and 'anubis' in resp.text.lower()
-    if not is_challenge:
-        is_challenge = '<html' in resp.text[:500].lower() and 'not a bot' in resp.text.lower()
+    is_challenge = '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower())
 
     if is_challenge:
         solved = solve_anubis(resp.text, domain, session)
@@ -131,6 +128,14 @@ def fetch_feed_items(url):
                 profile_image = feed.feed.image.get('href', '')
             elif hasattr(feed.feed, 'image'):
                 profile_image = getattr(feed.feed.image, 'href', '')
+
+            is_retweet = bool(title.startswith('RT by'))
+            rt_creator = ''
+            if is_retweet:
+                rt_match = re.match(r'RT by @(\S+):', title)
+                if rt_match:
+                    rt_creator = rt_match.group(1)
+
             items.append({
                 'title': title,
                 'description': description,
@@ -141,6 +146,8 @@ def fetch_feed_items(url):
                 'profile_image': profile_image,
                 'feed_title': feed.feed.get('title', url),
                 'feed_link': feed.feed.get('link', url),
+                'is_retweet': is_retweet,
+                'rt_creator': rt_creator,
             })
         return items
     except Exception:
@@ -200,25 +207,17 @@ def get_timeline():
     })
 
 
-@app.route('/api/test-feed')
-def test_feed():
-    url = request.args.get('url', 'https://nitter.privacyredirect.com/BeckyLynchWWE/rss')
+@app.route('/proxy/pic')
+def proxy_pic():
+    url = request.args.get('url', '')
+    if not url:
+        return '', 400
     try:
         resp, session = fetch_with_anubis(url)
-        is_html = '<html' in resp.text[:500].lower()
-        feed = feedparser.parse(resp.text)
-        return jsonify({
-            'url': url,
-            'status_code': resp.status_code,
-            'content_type': resp.headers.get('Content-Type', ''),
-            'is_html': is_html,
-            'entries_count': len(feed.entries),
-            'feed_title': feed.feed.get('title', 'N/A'),
-            'cookies': {c.name: c.value for c in session.cookies},
-            'raw_snippet': resp.text[:500],
-        })
-    except Exception as e:
-        return jsonify({'url': url, 'error': str(e)})
+        content_type = resp.headers.get('Content-Type', 'image/jpeg')
+        return resp.content, 200, {'Content-Type': content_type, 'Cache-Control': 'public, max-age=3600'}
+    except Exception:
+        return '', 500
 
 
 @app.route('/health')
