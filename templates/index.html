@@ -34,18 +34,19 @@
         }
         #header .left { display: flex; align-items: center; }
         #header .bird { font-size: 24px; margin-right: 8px; }
-        #refresh-btn {
+        .header-btn {
             background: rgba(255,255,255,0.2);
             border: 1px solid rgba(255,255,255,0.4);
             color: white;
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 3px;
             font-size: 12px;
             cursor: pointer;
             white-space: nowrap;
+            margin-left: 6px;
         }
-        #refresh-btn:hover { background: rgba(255,255,255,0.3); }
-        #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .header-btn:hover { background: rgba(255,255,255,0.3); }
+        .header-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spinning { animation: spin 1s linear infinite; display: inline-block; }
         #feed-form {
@@ -75,6 +76,7 @@
             cursor: pointer;
         }
         #feed-form button:hover { background-color: #3B7BA8; }
+        .hint { font-size: 11px; color: #8899A6; margin-top: 4px; }
         #feeds-list {
             padding: 8px 15px;
             font-size: 12px;
@@ -176,6 +178,7 @@
             z-index: 1000;
             display: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            max-width: 400px;
         }
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
@@ -187,11 +190,15 @@
     <div id="container">
         <div id="header">
             <div class="left"><span class="bird">&#128038;</span> Oldschool Twitter</div>
-            <button id="refresh-btn">&#8635; Aktualisieren</button>
+            <div>
+                <button class="header-btn" id="refresh-btn">&#8635; Aktualisieren</button>
+                <button class="header-btn" id="hard-refresh-btn">&#8635; Force</button>
+            </div>
         </div>
         <div id="feed-form">
-            <input type="text" id="feed-url" placeholder="Nitter RSS-Feed URL (z.B. https://nitter.privacyredirect.com/user/rss)">
+            <input type="text" id="feed-url" placeholder="Nitter Profil-URL (z.B. https://nitter.tiekoetter.com/BeckyLynchWWE)">
             <button id="add-btn">Feed hinzufügen</button>
+            <div class="hint">RSS-URLs (mit /rss am Ende) oder Profil-URLs werden unterstutzt. Min. 10 Min zwischen Aktualisierungen.</div>
         </div>
         <div id="feeds-list"></div>
         <div id="status-bar">
@@ -212,7 +219,7 @@
             const el = document.getElementById('toast');
             el.textContent = msg;
             el.className = 'show ' + type;
-            setTimeout(() => el.className = '', 4000);
+            setTimeout(() => el.className = '', 5000);
         }
 
         async function loadFeeds() {
@@ -236,7 +243,7 @@
 
         async function addFeed() {
             const input = document.getElementById('feed-url');
-            const url = input.value.trim();
+            let url = input.value.trim();
             if (!url) return;
             try {
                 const res = await fetch('/api/feeds', {
@@ -247,7 +254,7 @@
                 if (!res.ok) throw new Error('Server error');
                 input.value = '';
                 showToast('Feed hinzugefügt! Aktualisiere...', 'success');
-                await refreshTimeline();
+                await refreshTimeline(false);
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
             }
@@ -268,20 +275,22 @@
             }
         }
 
-        async function refreshTimeline() {
+        async function refreshTimeline(force = false) {
             const btn = document.getElementById('refresh-btn');
+            const hardBtn = document.getElementById('hard-refresh-btn');
             btn.disabled = true;
+            hardBtn.disabled = true;
             btn.innerHTML = '<span class="spinning">&#8635;</span> Lade...';
             try {
-                const res = await fetch('/api/refresh', {method: 'POST'});
+                const res = await fetch(`/api/refresh${force ? '?force=1' : ''}`, {method: 'POST'});
                 const data = await res.json();
                 const msg = data.new_tweets > 0
                     ? `${data.new_tweets} neue Tweets! (${data.total} gesamt)`
                     : `Keine neuen Tweets (${data.total} gesamt)`;
-                showToast(msg, data.new_tweets > 0 ? 'success' : 'success');
+                showToast(msg, 'success');
                 if (data.errors && data.errors.length > 0) {
                     const errMsg = data.errors.map(e => e.error).join(', ');
-                    setTimeout(() => showToast('Feed-Fehler: ' + errMsg, 'error'), 500);
+                    setTimeout(() => showToast('Feed-Fehler: ' + errMsg, 'error'), 600);
                 }
                 document.getElementById('last-refresh').textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
                 currentPage = 1;
@@ -290,6 +299,7 @@
                 showToast('Fehler beim Aktualisieren: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
+                hardBtn.disabled = false;
                 btn.innerHTML = '&#8635; Aktualisieren';
             }
         }
@@ -352,7 +362,7 @@
 
             return `
                 <div class="tweet" style="overflow:auto;">
-                    ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von @${rtCreator}</div>` : ''}
+                    ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von ${rtCreator}</div>` : ''}
                     <div class="tweet-header">
                         ${avatarHtml}
                         <span class="tweet-user">${username}</span>
@@ -379,7 +389,8 @@
             }
         });
 
-        document.getElementById('refresh-btn').addEventListener('click', refreshTimeline);
+        document.getElementById('refresh-btn').addEventListener('click', () => refreshTimeline(false));
+        document.getElementById('hard-refresh-btn').addEventListener('click', () => refreshTimeline(true));
         document.getElementById('add-btn').addEventListener('click', addFeed);
         document.getElementById('feed-url').addEventListener('keypress', e => {
             if (e.key === 'Enter') addFeed();
@@ -387,9 +398,8 @@
 
         loadFeeds();
         loadTimeline();
-        // Auto-refresh on first load if empty
         fetch('/api/timeline').then(r => r.json()).then(data => {
-            if (data.total === 0) refreshTimeline();
+            if (data.total === 0) refreshTimeline(false);
         });
     </script>
 </body>

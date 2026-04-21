@@ -9,13 +9,16 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 import feedparser
 import requests
 from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 DATA_DIR = '/app/data'
 FEEDS_FILE = os.path.join(DATA_DIR, 'feeds.json')
 TWEETS_FILE = os.path.join(DATA_DIR, 'tweets.json')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
+CACHE_FILE = os.path.join(DATA_DIR, 'cache_meta.json')
 COOKIE_CACHE = {}
+MIN_REFRESH_INTERVAL = 600
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(IMAGES_DIR, exist_ok=True)
@@ -23,9 +26,11 @@ os.makedirs(IMAGES_DIR, exist_ok=True)
 if not os.path.exists(FEEDS_FILE):
     with open(FEEDS_FILE, 'w') as f:
         json.dump([], f)
-
 if not os.path.exists(TWEETS_FILE):
     with open(TWEETS_FILE, 'w') as f:
+        json.dump({}, f)
+if not os.path.exists(CACHE_FILE):
+    with open(CACHE_FILE, 'w') as f:
         json.dump({}, f)
 
 logging.basicConfig(level=logging.INFO)
@@ -59,13 +64,14 @@ def save_tweets(tweets):
         json.dump(tweets, f, indent=2, ensure_ascii=False)
 
 
-def parse_date(date_str):
-    for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d %H:%M:%S']:
-        try:
-            return datetime.strptime(date_str, fmt)
-        except ValueError:
-            pass
-    return datetime.now()
+def load_cache_meta():
+    with open(CACHE_FILE, 'r') as f:
+        return json.load(f)
+
+
+def save_cache_meta(meta):
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(meta, f, indent=2)
 
 
 def get_domain(url):
@@ -79,25 +85,30 @@ def solve_anubis(html_content, base_url, session):
         html_content, re.DOTALL
     )
     if not preact_match:
-        logger.warning("No preact_info found in challenge page")
-        return None
-
-    try:
+        challenge_match = re.search(
+            r'<script\s+id="anubis_challenge"\s+type="application/json">(.*?)</script>',
+            html_content, re.DOTALL
+        )
+        if challenge_match:
+            data = json.loads(challenge_match.group(1))
+            challenge = data.get('challenge', {}).get('randomData', '')
+            difficulty = data.get('challenge', {}).get('difficulty', data.get('rules', {}).get('difficulty', 4))
+            redir = '/'
+        else:
+            logger.warning("No Anubis challenge found")
+            return None
+    else:
         preact_data = json.loads(preact_match.group(1))
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse preact_info JSON")
-        return None
-
-    challenge = preact_data.get('challenge', '')
-    difficulty = preact_data.get('difficulty', 4)
-    redir = preact_data.get('redir', '/')
+        challenge = preact_data.get('challenge', '')
+        difficulty = preact_data.get('difficulty', 4)
+        redir = preact_data.get('redir', '/')
 
     logger.info(f"Solving Anubis challenge (difficulty={difficulty}) for {base_url}")
 
     result = hashlib.sha256(challenge.encode('utf-8')).hexdigest()
 
     wait_time = difficulty * 0.125 + 0.5
-    logger.info(f"Waiting {wait_time:.1f}s (difficulty={difficulty})")
+    logger.info(f"Waiting {wait_time:.1f}s")
     time.sleep(wait_time)
 
     if '?' in redir:
@@ -113,15 +124,13 @@ def solve_anubis(html_content, base_url, session):
     try:
         resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=30, allow_redirects=True)
         logger.info(f"Challenge response: status={resp.status_code}, content-type={resp.headers.get('Content-Type', '')}")
-
-        if '<html' in resp.text[:500].lower() and 'anubis' in resp.text.lower():
-            logger.warning("Challenge not solved - still getting challenge page after attempt")
+        if '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower()):
+            logger.warning("Challenge not solved")
             return None
-
-        logger.info("Anubis challenge solved successfully!")
+        logger.info("Anubis challenge solved!")
         return resp
     except Exception as e:
-        logger.error(f"Failed to solve Anubis challenge: {e}")
+        logger.error(f"Anubis challenge failed: {e}")
         return None
 
 
@@ -129,10 +138,10 @@ def fetch_with_anubis(url):
     domain = get_domain(url)
     session = requests.Session()
 
-    cached = COOKIE_CACHE.get(domain)
-    if cached and cached.get('expires', 0) > time.time():
+    cached_cookies = COOKIE_CACHE.get(domain)
+    if cached_cookies and cached_cookies.get('expires', 0) > time.time():
         logger.info(f"Using cached cookies for {domain}")
-        for name, value in cached['cookies'].items():
+        for name, value in cached_cookies['cookies'].items():
             session.cookies.set(name, value, domain=urlparse(domain).netloc)
 
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
@@ -148,7 +157,6 @@ def fetch_with_anubis(url):
                 'expires': time.time() + 3600
             }
             if challenge_resp.headers.get('Content-Type', '').startswith('application/rss') or '<rss' in challenge_resp.text[:100]:
-                logger.info("Got RSS content directly from challenge redirect")
                 return challenge_resp, session
             resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
         else:
@@ -180,7 +188,248 @@ def download_image(url):
             return f"/images/{filename}"
     except Exception as e:
         logger.error(f"Failed to download image {url}: {e}")
-    return None
+    return url
+
+
+def scrape_nitter_profile(url):
+    logger.info(f"Scraping Nitter profile: {url}")
+    resp, session = fetch_with_anubis(url)
+    if resp.status_code != 200:
+        logger.error(f"HTTP {resp.status_code} for {url}")
+        return [], None
+
+    if '<html' in resp.text[:500].lower() and ('not a bot' in resp.text.lower() or 'anubis' in resp.text.lower()):
+        logger.error(f"Still bot protection for {url}")
+        return [], None
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    items = []
+
+    profile_avatar = ''
+    avatar_img = soup.select_one('.profile-avatar img')
+    if avatar_img:
+        profile_avatar = avatar_img.get('src', '')
+        if profile_avatar and not profile_avatar.startswith('http'):
+            profile_avatar = urljoin(url, profile_avatar)
+
+    timeline = soup.select('.timeline-item')
+    if not timeline:
+        logger.warning(f"No timeline items found for {url}")
+        return [], None
+
+    for item in timeline:
+        tweet_link_tag = item.select_one('a.tweet-link')
+        if not tweet_link_tag:
+            tweet_link_tag = item.select_one('.tweet-date a')
+        tweet_link = ''
+        if tweet_link_tag:
+            tweet_link = tweet_link_tag.get('href', '')
+            if tweet_link and not tweet_link.startswith('http'):
+                tweet_link = urljoin(url, tweet_link)
+
+        creator = ''
+        username_tag = item.select_one('.fullname')
+        if username_tag:
+            creator = username_tag.get_text(strip=True)
+        handle_tag = item.select_one('.username')
+        if handle_tag:
+            handle = handle_tag.get_text(strip=True)
+            if not creator:
+                creator = handle
+
+        content_tag = item.select_one('.tweet-content')
+        description = ''
+        if content_tag:
+            for br in content_tag.find_all('br'):
+                br.replace_with('\n')
+            for a in content_tag.find_all('a'):
+                href = a.get('href', '')
+                if href and not href.startswith('http'):
+                    href = urljoin(url, href)
+                a.replace_with(f'<a href="{href}" target="_blank">{a.get_text()}</a>')
+            description = str(content_tag).replace('<div class="tweet-content">', '').replace('</div>', '').strip()
+
+        date_tag = item.select_one('.tweet-date a')
+        date_str = ''
+        timestamp = 0
+        if date_tag:
+            date_str = date_tag.get('title', '')
+            if not date_str:
+                date_str = date_tag.get_text(strip=True)
+            try:
+                timestamp = datetime.strptime(date_str, '%b %d, %Y %I:%M:%S %p').timestamp()
+            except ValueError:
+                try:
+                    timestamp = datetime.strptime(date_str, '%d %b %Y %H:%M:%S %Z').timestamp()
+                except ValueError:
+                    timestamp = time.time()
+
+        is_retweet = bool(item.select_one('.retweet-header'))
+        rt_creator = ''
+        if is_retweet:
+            rt_tag = item.select_one('.retweet-header .fullname')
+            if rt_tag:
+                rt_creator = rt_tag.get_text(strip=True)
+
+        avatar = profile_avatar
+        avatar_tag = item.select_one('.tweet-avatar img')
+        if avatar_tag:
+            avatar = avatar_tag.get('src', '')
+            if avatar and not avatar.startswith('http'):
+                avatar = urljoin(url, avatar)
+
+        images = item.select('.attachment img, .tweet-content img')
+        for img in images:
+            src = img.get('src', '')
+            if src and not src.startswith('http'):
+                img['src'] = urljoin(url, src)
+
+        quote = item.select_one('.quote')
+        if quote:
+            quote_text = quote.get_text(strip=True)
+            description += f'\n<blockquote>{quote_text}</blockquote>'
+
+        items.append({
+            'title': description[:80] + '...' if len(description) > 80 else description,
+            'description': description,
+            'link': tweet_link,
+            'date': date_str,
+            'timestamp': timestamp or time.time(),
+            'creator': creator,
+            'profile_image': avatar,
+            'feed_title': soup.title.string.strip() if soup.title else url,
+            'feed_link': url,
+            'is_retweet': is_retweet,
+            'rt_creator': rt_creator,
+        })
+
+    logger.info(f"Scraped {len(items)} tweets from {url}")
+    return items, profile_avatar
+
+
+def fetch_rss_feed(url):
+    logger.info(f"Fetching RSS feed: {url}")
+    resp, session = fetch_with_anubis(url)
+    if '<html' in resp.text[:500].lower():
+        logger.error(f"Got HTML instead of RSS for {url}")
+        return [], None
+
+    feed = feedparser.parse(resp.text)
+    if not feed.entries:
+        return [], None
+
+    profile_image = ''
+    if feed.feed.get('image'):
+        profile_image = feed.feed.image.get('href', '')
+    elif hasattr(feed.feed, 'image'):
+        profile_image = getattr(feed.feed.image, 'href', '')
+
+    items = []
+    for entry in feed.entries:
+        date_str = entry.get('published', '')
+        from datetime import datetime as dt
+        timestamp = 0
+        for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d %H:%M:%S']:
+            try:
+                timestamp = dt.strptime(date_str, fmt).timestamp()
+                break
+            except ValueError:
+                pass
+        if not timestamp:
+            timestamp = time.time()
+
+        creator = getattr(entry, 'author', getattr(entry, 'dc_creator', ''))
+        title = entry.get('title', '')
+        description = entry.get('description', entry.get('summary', ''))
+        link = entry.get('link', '')
+
+        is_retweet = bool(title.startswith('RT by'))
+        rt_creator = ''
+        if is_retweet:
+            rt_match = re.match(r'RT by @(\S+):', title)
+            if rt_match:
+                rt_creator = rt_match.group(1)
+
+        items.append({
+            'title': title,
+            'description': description,
+            'link': link,
+            'date': date_str,
+            'timestamp': timestamp,
+            'creator': creator,
+            'profile_image': profile_image,
+            'feed_title': feed.feed.get('title', url),
+            'feed_link': feed.feed.get('link', url),
+            'is_retweet': is_retweet,
+            'rt_creator': rt_creator,
+        })
+
+    return items, profile_image
+
+
+def is_rss_url(url):
+    return url.rstrip('/').endswith('/rss') or '/rss?' in url
+
+
+def refresh_and_cache():
+    feeds = load_feeds()
+    tweets = load_tweets()
+    cache_meta = load_cache_meta()
+    new_count = 0
+    errors = []
+
+    for feed_url in feeds:
+        last_refresh = cache_meta.get(feed_url, {}).get('last_refresh', 0)
+        if time.time() - last_refresh < MIN_REFRESH_INTERVAL:
+            logger.info(f"Skipping {feed_url} - refreshed {(time.time() - last_refresh):.0f}s ago (min {MIN_REFRESH_INTERVAL}s)")
+            continue
+
+        try:
+            if is_rss_url(feed_url):
+                items, profile_image = fetch_rss_feed(feed_url)
+            else:
+                items, profile_image = scrape_nitter_profile(feed_url)
+
+            if not items:
+                errors.append({'url': feed_url, 'error': 'No items found'})
+                continue
+
+            for item in items:
+                tweet_id = item.get('link', '') or item.get('title', '')[:50]
+                if not tweet_id or tweet_id in tweets:
+                    continue
+
+                profile_img = item.get('profile_image', '')
+                local_avatar = download_image(profile_img) if profile_img else ''
+
+                description = item.get('description', '')
+                if not is_rss_url(feed_url):
+                    description = process_description_images(description)
+
+                tweets[tweet_id] = {
+                    'title': item.get('title', ''),
+                    'description': description,
+                    'link': tweet_id,
+                    'date': item.get('date', ''),
+                    'timestamp': item.get('timestamp', 0),
+                    'creator': item.get('creator', ''),
+                    'profile_image': local_avatar or profile_img,
+                    'feed_title': item.get('feed_title', ''),
+                    'feed_link': item.get('feed_link', ''),
+                    'is_retweet': item.get('is_retweet', False),
+                    'rt_creator': item.get('rt_creator', ''),
+                }
+                new_count += 1
+
+            cache_meta[feed_url] = {'last_refresh': time.time()}
+        except Exception as e:
+            logger.error(f"Error processing {feed_url}: {e}")
+            errors.append({'url': feed_url, 'error': str(e)})
+
+    save_tweets(tweets)
+    save_cache_meta(cache_meta)
+    logger.info(f"Cached {new_count} new tweets, total {len(tweets)}")
+    return new_count, len(tweets), errors
 
 
 def process_description_images(description):
@@ -190,103 +439,8 @@ def process_description_images(description):
         if local:
             return f'<img src="{local}" />'
         return match.group(0)
-
     description = re.sub(r'<img[^>]*src="([^"]+)"[^>]*/?\s*>', replace_img, description)
     return description
-
-
-def fetch_feed_items(url):
-    try:
-        resp, session = fetch_with_anubis(url)
-
-        if '<html' in resp.text[:500].lower():
-            logger.error(f"Got HTML instead of RSS for {url}")
-            return [], 'Got HTML instead of RSS (bot protection)'
-
-        feed = feedparser.parse(resp.text)
-        if not feed.entries:
-            logger.warning(f"No entries in feed for {url}")
-            return [], 'No entries found in feed'
-
-        items = []
-        for entry in feed.entries:
-            date_str = entry.get('published', '')
-            timestamp = parse_date(date_str).timestamp()
-            creator = getattr(entry, 'author', getattr(entry, 'dc_creator', ''))
-            title = entry.get('title', '')
-            description = entry.get('description', entry.get('summary', ''))
-            link = entry.get('link', '')
-            profile_image = ''
-            if feed.feed.get('image'):
-                profile_image = feed.feed.image.get('href', '')
-            elif hasattr(feed.feed, 'image'):
-                profile_image = getattr(feed.feed.image, 'href', '')
-
-            is_retweet = bool(title.startswith('RT by'))
-            rt_creator = ''
-            if is_retweet:
-                rt_match = re.match(r'RT by @(\S+):', title)
-                if rt_match:
-                    rt_creator = rt_match.group(1)
-
-            items.append({
-                'title': title,
-                'description': description,
-                'link': link,
-                'date': date_str,
-                'timestamp': timestamp,
-                'creator': creator,
-                'profile_image': profile_image,
-                'feed_title': feed.feed.get('title', url),
-                'feed_link': feed.feed.get('link', url),
-                'is_retweet': is_retweet,
-                'rt_creator': rt_creator,
-            })
-        logger.info(f"Fetched {len(items)} items from {url}")
-        return items, None
-    except Exception as e:
-        logger.error(f"Error fetching {url}: {e}")
-        return [], str(e)
-
-
-def refresh_and_cache():
-    feeds = load_feeds()
-    tweets = load_tweets()
-    new_count = 0
-    errors = []
-
-    for feed_url in feeds:
-        items, error = fetch_feed_items(feed_url)
-        if error:
-            errors.append({'url': feed_url, 'error': error})
-        for item in items:
-            tweet_id = item.get('link', '')
-            if not tweet_id or tweet_id in tweets:
-                continue
-
-            profile_image = item.get('profile_image', '')
-            local_avatar = download_image(profile_image) if profile_image else ''
-
-            description = process_description_images(item.get('description', ''))
-
-            tweets[tweet_id] = {
-                'title': item.get('title', ''),
-                'description': description,
-                'link': tweet_id,
-                'date': item.get('date', ''),
-                'timestamp': item.get('timestamp', 0),
-                'creator': item.get('creator', ''),
-                'profile_image': local_avatar or profile_image,
-                'feed_title': item.get('feed_title', ''),
-                'feed_link': item.get('feed_link', ''),
-                'is_retweet': item.get('is_retweet', False),
-                'rt_creator': item.get('rt_creator', ''),
-            }
-            new_count += 1
-
-    save_tweets(tweets)
-    logger.info(f"Cached {new_count} new tweets, total {len(tweets)}")
-    return new_count, len(tweets), errors
 
 
 @app.route('/')
@@ -301,8 +455,7 @@ def serve_image(filename):
 
 @app.route('/api/feeds', methods=['GET'])
 def get_feeds():
-    feeds = load_feeds()
-    return jsonify(feeds)
+    return jsonify(load_feeds())
 
 
 @app.route('/api/feeds', methods=['POST'])
@@ -311,6 +464,8 @@ def add_feed():
     url = data.get('url', '').strip()
     if not url:
         return jsonify({'error': 'URL required'}), 400
+    if not url.startswith('http'):
+        url = 'https://' + url
     feeds = load_feeds()
     if url not in feeds:
         feeds.append(url)
@@ -331,6 +486,12 @@ def remove_feed():
 
 @app.route('/api/refresh', methods=['POST'])
 def refresh():
+    force = request.args.get('force', '0') == '1'
+    if force:
+        cache_meta = load_cache_meta()
+        for key in cache_meta:
+            cache_meta[key]['last_refresh'] = 0
+        save_cache_meta(cache_meta)
     new_count, total, errors = refresh_and_cache()
     result = {'new_tweets': new_count, 'total': total}
     if errors:
@@ -359,15 +520,19 @@ def get_timeline():
     })
 
 
+@app.route('/api/cache-info')
+def cache_info():
+    cache_meta = load_cache_meta()
+    return jsonify(cache_meta)
+
+
 @app.route('/health')
 def health():
-    tweets = load_tweets()
-    feeds = load_feeds()
     return jsonify({
         'status': 'ok',
-        'total_tweets': len(tweets),
-        'total_feeds': len(feeds),
-        'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()}
+        'total_tweets': len(load_tweets()),
+        'total_feeds': len(load_feeds()),
+        'min_refresh_interval': MIN_REFRESH_INTERVAL,
     })
 
 
