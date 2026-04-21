@@ -1,14 +1,13 @@
 import json
 import os
 import re
-import hmac
 import hashlib
 import time
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
 import requests
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlencode
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
@@ -49,20 +48,23 @@ def get_domain(url):
 
 
 def solve_anubis(html_content, base_url, session):
-    preact_match = re.search(r'<script id="preact_info" type="application/json">(.*?)</script>', html_content, re.DOTALL)
+    preact_match = re.search(
+        r'<script\s+id="preact_info"\s+type="application/json">(.*?)</script>',
+        html_content, re.DOTALL
+    )
     if not preact_match:
-        return None
+        return False
 
     try:
         preact_data = json.loads(preact_match.group(1))
     except json.JSONDecodeError:
-        return None
+        return False
 
     challenge = preact_data.get('challenge', '')
     difficulty = preact_data.get('difficulty', 4)
     redir = preact_data.get('redir', '/')
 
-    result = hmac.new(b'', challenge.encode(), hashlib.sha256).hexdigest()
+    result = hashlib.sha256(challenge.encode('utf-8')).hexdigest()
 
     wait_time = difficulty * 0.125 + 0.5
     time.sleep(wait_time)
@@ -76,10 +78,10 @@ def solve_anubis(html_content, base_url, session):
         pass_url = urljoin(base_url, pass_url)
 
     try:
-        resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
-        return dict(session.cookies)
+        resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=30, allow_redirects=True)
+        return True
     except Exception:
-        return None
+        return False
 
 
 def fetch_with_anubis(url):
@@ -87,15 +89,20 @@ def fetch_with_anubis(url):
     session = requests.Session()
 
     if domain in COOKIE_CACHE and COOKIE_CACHE[domain].get('expires', 0) > time.time():
-        session.cookies.update(COOKIE_CACHE[domain]['cookies'])
+        for name, value in COOKIE_CACHE[domain]['cookies'].items():
+            session.cookies.set(name, value, domain=urlparse(domain).netloc)
 
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
 
-    if '<html' in resp.text[:500].lower() and ('not a bot' in resp.text.lower() or 'anubis' in resp.text.lower()):
-        cookies = solve_anubis(resp.text, domain, session)
-        if cookies:
+    is_challenge = '<html' in resp.text[:500].lower() and 'anubis' in resp.text.lower()
+    if not is_challenge:
+        is_challenge = '<html' in resp.text[:500].lower() and 'not a bot' in resp.text.lower()
+
+    if is_challenge:
+        solved = solve_anubis(resp.text, domain, session)
+        if solved:
             COOKIE_CACHE[domain] = {
-                'cookies': cookies,
+                'cookies': {c.name: c.value for c in session.cookies},
                 'expires': time.time() + 3600
             }
             resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
@@ -207,7 +214,7 @@ def test_feed():
             'is_html': is_html,
             'entries_count': len(feed.entries),
             'feed_title': feed.feed.get('title', 'N/A'),
-            'cookies': dict(session.cookies),
+            'cookies': {c.name: c.value for c in session.cookies},
             'raw_snippet': resp.text[:500],
         })
     except Exception as e:
