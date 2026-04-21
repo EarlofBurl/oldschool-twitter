@@ -31,8 +31,10 @@ def parse_date(date_str):
 
 def fetch_feed_items(url):
     try:
-        feed = feedparser.parse(url)
+        feed = feedparser.parse(url, timeout=10)
         items = []
+        if not feed.entries:
+            return items
         for entry in feed.entries:
             date_str = entry.get('published', '')
             timestamp = parse_date(date_str).timestamp()
@@ -103,6 +105,11 @@ def get_timeline():
         all_items.extend(items)
     all_items.sort(key=lambda x: x['timestamp'], reverse=True)
     return jsonify(all_items[:50])
+
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
 
 
 if __name__ == '__main__':

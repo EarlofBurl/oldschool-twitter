@@ -10,16 +10,19 @@
             padding: 0;
             box-sizing: border-box;
         }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #C6E2E8;
+        html, body {
+            background-color: #C6E2E8 !important;
             color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
         }
         #container {
             width: 520px;
             margin: 0 auto;
             background-color: #F5F8FA;
             min-height: 100vh;
+            border-left: 1px solid #E1E8ED;
+            border-right: 1px solid #E1E8ED;
         }
         #header {
             background-color: #5595BF;
@@ -48,6 +51,7 @@
             border-radius: 3px;
             font-size: 14px;
             margin-bottom: 8px;
+            box-sizing: border-box;
         }
         #feed-form button {
             background-color: #5595BF;
@@ -66,6 +70,7 @@
             padding: 10px 15px;
             border-bottom: 1px solid #E1E8ED;
             font-size: 12px;
+            min-height: 30px;
         }
         #feeds-list .feed-tag {
             display: inline-block;
@@ -87,20 +92,26 @@
             border-bottom: 1px solid #E1E8ED;
             padding: 12px 15px;
             min-height: 80px;
+            background-color: white;
         }
         .tweet:hover {
             background-color: #F5F8FA;
         }
         .tweet-header {
             margin-bottom: 6px;
+            display: flex;
+            align-items: flex-start;
         }
         .tweet-avatar {
             width: 48px;
             height: 48px;
             border-radius: 5px;
-            float: left;
+            flex-shrink: 0;
             margin-right: 10px;
             background-color: #E1E8ED;
+        }
+        .tweet-meta {
+            flex-grow: 1;
         }
         .tweet-user {
             font-weight: bold;
@@ -115,7 +126,7 @@
         .tweet-time {
             color: #8899A6;
             font-size: 12px;
-            float: right;
+            margin-left: 8px;
         }
         .tweet-content {
             margin-left: 58px;
@@ -132,7 +143,7 @@
             margin-top: 8px;
         }
         .tweet-content a {
-            color: #5595BF;
+            color: #5595BF !important;
         }
         .tweet-content blockquote {
             border-left: 3px solid #E1E8ED;
@@ -162,7 +173,7 @@
         .error {
             text-align: center;
             padding: 20px;
-            color: #E1E8ED;
+            color: #cc0000;
         }
         .empty-state {
             text-align: center;
@@ -178,16 +189,6 @@
             font-size: 12px;
             margin-bottom: 4px;
         }
-        .feed-banner {
-            background-color: #E1E8ED;
-            padding: 5px 15px;
-            font-size: 11px;
-            color: #8899A6;
-        }
-        .feed-banner a {
-            color: #5595BF;
-            text-decoration: none;
-        }
     </style>
 </head>
 <body>
@@ -198,7 +199,7 @@
         <div id="main">
             <div id="feed-form">
                 <input type="text" id="feed-url" placeholder="RSS-Feed URL eingeben (z.B. https://nitter.privacyredirect.com/user/rss)">
-                <button onclick="addFeed()">Feed hinzufügen</button>
+                <button id="add-btn">Feed hinzufügen</button>
                 <div id="feeds-list"></div>
             </div>
             <div class="timeline" id="timeline">
@@ -211,14 +212,19 @@
         async function loadFeeds() {
             try {
                 const res = await fetch('/api/feeds');
+                if (!res.ok) throw new Error('API error');
                 const feeds = await res.json();
                 const container = document.getElementById('feeds-list');
+                if (!feeds.length) {
+                    container.innerHTML = '<span style="color:#8899A6">Keine Feeds - füge einen hinzu</span>';
+                    return;
+                }
                 container.innerHTML = feeds.map(url => {
                     const name = url.split('/').filter(Boolean).pop() || url;
                     return `<span class="feed-tag" onclick="removeFeed('${encodeURIComponent(url)}')" title="Klicken zum Entfernen">${name}</span>`;
                 }).join('');
             } catch (e) {
-                console.error('Feeds laden fehlgeschlagen:', e);
+                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Feeds laden fehlgeschlagen</span>';
             }
         }
 
@@ -256,6 +262,7 @@
             container.innerHTML = '<div class="loading">Lade Timeline...</div>';
             try {
                 const res = await fetch('/api/timeline');
+                if (!res.ok) throw new Error('API error');
                 const items = await res.json();
                 if (!items.length) {
                     container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu, um die Timeline zu sehen.</div>';
@@ -263,15 +270,13 @@
                 }
                 container.innerHTML = items.map(item => {
                     const creator = item.creator || 'Unbekannt';
-                    const username = creator.replace('@', '');
-                    const profileImg = item.profile_image || `https://nitter.privacyredirect.com/pic/ame-48.png`;
+                    const profileImg = item.profile_image || 'https://nitter.privacyredirect.com/pic/ame-48.png';
                     const description = item.description || item.title || '';
                     const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
 
                     let content = description;
-                    content = content.replace(/<img src="https:\/\/nitter\.privacyredirect\.com\/pic\/media([^"]*)"[^>]*>/g, '<img src="https://nitter.privacyredirect.com/pic/media$1">');
-                    content = content.replace(/<a href="https:\/\/nitter\.privacyredirect\.com\/([^"]*#m)">/g, '<a href="https://nitter.privacyredirect.com/$1">');
-                    content = content.replace(/<a href="([^"]*nitter[^"]*)"[^>]*>/g, '<a href="$1" target="_blank">');
+                    content = content.replace(/src="https:\/\/nitter\.privacyredirect\.com\/pic\/media%2F([^"]*)"/g, 'src="https://nitter.privacyredirect.com/pic/media%2F$1"');
+                    content = content.replace(/href="([^"]*nitter[^"]*)"/g, 'href="$1" target="_blank"');
 
                     const isRetweet = item.title && item.title.startsWith('RT by');
                     const rtMatch = description.match(/RT by @([^:]+):/);
@@ -282,8 +287,10 @@
                             ${isRetweet ? `<div class="retweet-indicator">↳ RT by @${rtCreator}</div>` : ''}
                             <div class="tweet-header">
                                 <img class="tweet-avatar" src="${profileImg}" alt="${creator}" onerror="this.src='https://nitter.privacyredirect.com/pic/ame-48.png'">
-                                <span class="tweet-user">${creator}</span>
-                                <span class="tweet-time">${date}</span>
+                                <div class="tweet-meta">
+                                    <span class="tweet-user">${creator}</span>
+                                    <span class="tweet-time">${date}</span>
+                                </div>
                             </div>
                             <div class="tweet-content">${content}</div>
                             <div class="tweet-actions">
@@ -293,9 +300,14 @@
                     `;
                 }).join('');
             } catch (e) {
-                container.innerHTML = '<div class="error">Timeline konnte nicht geladen werden.</div>';
+                container.innerHTML = '<div class="error">Timeline konnte nicht geladen werden: ' + e.message + '</div>';
             }
         }
+
+        document.getElementById('add-btn').addEventListener('click', addFeed);
+        document.getElementById('feed-url').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addFeed();
+        });
 
         loadFeeds();
         loadTimeline();
