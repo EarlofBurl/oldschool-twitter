@@ -54,13 +54,15 @@
         }
         .profile-stats span { color: #8899A6; }
         .profile-stats b { color: #333; }
-        .profile-tagcloud { margin-top: 10px; }
-        .ptc-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-        .ptc-tag { background: #E1E8ED; color: #5595BF; padding: 2px 7px; border-radius: 10px; font-size: 11px; cursor: pointer; white-space: nowrap; }
-        .ptc-tag:hover { background: #5595BF; color: white; }
-        .ptc-tag.active { background: #5595BF; color: white; }
-        .ptc-filter-info { margin-top: 6px; padding: 4px 8px; background: #FFEBEE; color: #C62828; border-radius: 4px; font-size: 11px; display: none; align-items: center; justify-content: space-between; }
+        .profile-tagcloud { margin-top: 10px; background: linear-gradient(135deg, #F5F8FA 0%, #E8F0F8 100%); padding: 10px; border-radius: 6px; }
+        .ptc-header { font-weight: bold; font-size: 12px; color: #5595BF; margin-bottom: 6px; }
+        .ptc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .ptc-tag { background: white; color: #5595BF; padding: 2px 9px; border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; border: 1px solid #D6E4EF; transition: all 0.15s; }
+        .ptc-tag:hover { background: #5595BF; color: white; border-color: #5595BF; }
+        .ptc-tag.active { background: #5595BF; color: white; border-color: #3B7BA8; }
+        .ptc-filter-info { margin-top: 6px; padding: 4px 10px; background: #FFF3E0; color: #E65100; border-radius: 12px; font-size: 11px; display: none; align-items: center; justify-content: space-between; border: 1px solid #FFE0B2; }
         .ptc-filter-info.show { display: flex; }
+        .ptc-filter-info button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 11px; }
 
         .timeline { background-color: white; }
         .tweet { border-bottom: 1px solid #E1E8ED; padding: 12px 20px; }
@@ -185,11 +187,11 @@
                 var tags=data.hashtags||[];
                 var c=document.getElementById('ptc-tags');
                 if(!c)return;
-                if(!tags.length){c.innerHTML='<span style="color:#8899A6;font-size:11px">Keine Hashtags</span>';return;}
+                if(!tags.length){c.innerHTML='<span style="color:#8899A6;font-size:11px">Keine Themen</span>';return;}
                 c.innerHTML=tags.map(function(t){
-                    var sz=Math.min(10+t.count*2,18);
+                    var sz=Math.min(10+Math.round(Math.log(t.count+1)*2),17);
                     var cls='ptc-tag'+(activeTag===t.tag?' active':'');
-                    return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+' <small>'+t.count+'</small></span>';
+                    return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+'</span>';
                 }).join('');
             }).catch(function(){});
         }
@@ -197,7 +199,7 @@
         function filterByTag(tag){
             if(activeTag===tag){clearTagFilter();return;}
             activeTag=tag;
-            document.getElementById('ptc-filter-label').textContent='Filter: '+tag;
+            document.getElementById('ptc-filter-label').textContent=tag;
             document.getElementById('ptc-filter-info').classList.add('show');
             currentPage=1;
             loadTimeline();
@@ -233,7 +235,7 @@
                     +'<div class="profile-handle">'+esc(data.creator||'')+'</div>'
                     +'<div class="profile-source"><a href="'+esc(data.feed_url)+'" target="_blank">'+esc(data.feed_url)+'</a></div>'
                     +'<div class="profile-stats"><span><b>'+data.total+'</b> Tweets</span></div>'
-                    +'<div class="profile-tagcloud"><div style="font-size:12px;font-weight:bold;color:#333">Themen</div><div class="ptc-tags" id="ptc-tags"></div><div class="ptc-filter-info" id="ptc-filter-info"><span id="ptc-filter-label"></span><button onclick="clearTagFilter()" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:11px">Entfernen</button></div></div>'
+                    +'<div class="profile-tagcloud"><div class="ptc-header">Themen</div><div class="ptc-tags" id="ptc-tags"></div><div class="ptc-filter-info" id="ptc-filter-info"><span id="ptc-filter-label"></span><button onclick="clearTagFilter()">Filter entfernen</button></div></div>'
                     +'</div>'
                     +'</div>';
                 loadHashtags();

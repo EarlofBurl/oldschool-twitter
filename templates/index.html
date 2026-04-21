@@ -63,23 +63,22 @@
         .sidebar-overlay { position: fixed; top: 50px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 85; display: none; }
         .sidebar-overlay.open { display: block; }
 
-        /* --- Hashtag Cloud (left side) --- */
-        #tagcloud { position: fixed; top: 50px; left: 0; bottom: 0; width: 220px; background: #F5F8FA; border-right: 1px solid #E1E8ED; z-index: 80; overflow-y: auto; padding: 10px; display: none; }
-        #tagcloud.open { display: block; }
-        .tc-header { font-weight: bold; font-size: 13px; color: #333; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .tc-close { background: none; border: none; font-size: 16px; cursor: pointer; color: #8899A6; }
-        .tc-close:hover { color: #333; }
-        .tc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-        .tc-tag { background: #E1E8ED; color: #5595BF; padding: 3px 8px; border-radius: 12px; font-size: 12px; cursor: pointer; white-space: nowrap; text-decoration: none; }
-        .tc-tag:hover { background: #5595BF; color: white; }
-        .tc-tag.active { background: #5595BF; color: white; }
-        .tc-filter-info { margin-top: 8px; padding: 6px 8px; background: #FFEBEE; color: #C62828; border-radius: 4px; font-size: 12px; display: none; }
-        .tc-filter-info.show { display: flex; align-items: center; justify-content: space-between; }
+        /* --- Hashtag Cloud --- */
+        #tagcloud { padding: 12px 20px; border-bottom: 1px solid #E1E8ED; background: linear-gradient(135deg, #F5F8FA 0%, #E8F0F8 100%); }
+        .tc-header { font-weight: bold; font-size: 13px; color: #5595BF; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .tc-toggle { background: none; border: none; font-size: 14px; cursor: pointer; color: #8899A6; }
+        .tc-toggle:hover { color: #5595BF; }
+        .tc-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; padding: 4px 0; }
+        .tc-tag { background: white; color: #5595BF; padding: 3px 10px; border-radius: 14px; font-size: 12px; cursor: pointer; white-space: nowrap; border: 1px solid #D6E4EF; transition: all 0.15s; }
+        .tc-tag:hover { background: #5595BF; color: white; border-color: #5595BF; transform: scale(1.05); }
+        .tc-tag.active { background: #5595BF; color: white; border-color: #3B7BA8; }
+        .tc-filter-info { margin-top: 8px; padding: 6px 10px; background: #FFF3E0; color: #E65100; border-radius: 14px; font-size: 12px; display: none; align-items: center; justify-content: space-between; border: 1px solid #FFE0B2; }
+        .tc-filter-info.show { display: flex; }
+        .tc-filter-info button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 12px; }
 
         /* --- Main --- */
         #main { margin-top: 50px; max-width: 800px; margin-left: auto; margin-right: auto; background-color: white; min-height: calc(100vh - 50px); border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
         #main.search-open { margin-top: 95px; }
-        #main.tagcloud-open { margin-left: 220px; }
         #status-bar { background: #E1E8ED; padding: 6px 20px; font-size: 11px; color: #8899A6; border-bottom: 1px solid #E1E8ED; display: flex; justify-content: space-between; }
 
         /* --- Timeline --- */
@@ -163,7 +162,6 @@
         <button class="nav-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
         <button class="nav-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
         <button class="nav-btn" onclick="toggleSearch()">&#128269;</button>
-        <button class="nav-btn" id="tagcloud-btn" onclick="toggleTagCloud()">#</button>
         <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776;</button>
     </div>
 
@@ -183,22 +181,21 @@
         <div class="feed-list" id="feed-list"></div>
     </div>
 
-    <div id="tagcloud">
-        <div class="tc-header">Themen <button class="tc-close" onclick="toggleTagCloud()">&times;</button></div>
-        <div class="tc-tags" id="tc-tags"></div>
-        <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px">Entfernen</button></div>
-    </div>
-
     <div id="main">
         <div id="status-bar">
             <span id="tweet-count">0 Tweets</span>
             <span id="last-refresh">Nie aktualisiert</span>
         </div>
+        <div id="tagcloud">
+            <div class="tc-header">Themen <button class="tc-toggle" id="tc-toggle" onclick="toggleCloudCollapse()">&#9660;</button></div>
+            <div class="tc-tags" id="tc-tags"></div>
+            <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()">Filter entfernen</button></div>
+        </div>
         <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
     </div>
 
 <script>
-var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,tagCloudOpen=false,activeTag='';
+var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,cloudCollapsed=false,activeTag='';
 
 function toggleSidebar(){
     sidebarOpen=!sidebarOpen;
@@ -251,31 +248,30 @@ function doSearch(q){
 
 function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-function toggleTagCloud(){
-    tagCloudOpen=!tagCloudOpen;
-    document.getElementById('tagcloud').classList.toggle('open',tagCloudOpen);
-    document.getElementById('main').classList.toggle('tagcloud-open',tagCloudOpen);
-    document.getElementById('tagcloud-btn').classList.toggle('active',tagCloudOpen);
-    if(tagCloudOpen) loadHashtags();
+function toggleCloudCollapse(){
+    cloudCollapsed=!cloudCollapsed;
+    document.getElementById('tc-tags').style.display=cloudCollapsed?'none':'flex';
+    document.getElementById('tc-filter-info').style.display=(cloudCollapsed||!activeTag)?'none':'flex';
+    document.getElementById('tc-toggle').innerHTML=cloudCollapsed?'&#9654;':'&#9660;';
 }
 
 function loadHashtags(){
     fetch('/api/hashtags').then(function(r){return r.json();}).then(function(data){
         var tags=data.hashtags||[];
         var c=document.getElementById('tc-tags');
-        if(!tags.length){c.innerHTML='<div style="color:#8899A6;font-size:12px">Keine Hashtags gefunden.</div>';return;}
+        if(!tags.length){c.innerHTML='<span style="color:#8899A6;font-size:12px">Noch keine Themen.</span>';return;}
         c.innerHTML=tags.map(function(t){
-            var sz=Math.min(11+t.count*2,22);
+            var sz=Math.min(10+Math.round(Math.log(t.count+1)*3),22);
             var cls='tc-tag'+(activeTag===t.tag?' active':'');
-            return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+' <small>'+t.count+'</small></span>';
+            return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+'</span>';
         }).join('');
-    }).catch(function(){document.getElementById('tc-tags').innerHTML='<div style="color:#cc0000;font-size:12px">Fehler beim Laden</div>';});
+    }).catch(function(){document.getElementById('tc-tags').innerHTML='<span style="color:#cc0000;font-size:12px">Fehler</span>';});
 }
 
 function filterByTag(tag){
     if(activeTag===tag){clearTagFilter();return;}
     activeTag=tag;
-    document.getElementById('tc-filter-label').textContent='Filter: '+tag;
+    document.getElementById('tc-filter-label').textContent=tag;
     document.getElementById('tc-filter-info').classList.add('show');
     currentPage=1;
     loadTimeline();

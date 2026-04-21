@@ -568,7 +568,7 @@ def refresh_and_cache():
 
 def extract_hashtags(text):
     clean = re.sub(r'<[^>]+>', ' ', text)
-    return [t.lower() for t in re.findall(r'#(\w+)', clean)]
+    return [('#' + t).lower() for t in re.findall(r'#(\w+)', clean)]
 
 
 @app.route('/api/hashtags')
