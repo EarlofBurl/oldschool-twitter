@@ -30,8 +30,21 @@
             border-bottom: 2px solid #3B7BA8;
             display: flex;
             align-items: center;
+            justify-content: space-between;
         }
+        #header .left { display: flex; align-items: center; }
         #header .bird { font-size: 24px; margin-right: 8px; }
+        #refresh-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #refresh-btn:hover { background: rgba(255,255,255,0.3); }
+        #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         #feed-form {
             background-color: #F5F8FA;
             padding: 12px 15px;
@@ -149,6 +162,15 @@
             border-bottom: 1px solid #E1E8ED;
         }
         .error-banner a { color: #C62828; text-decoration: underline; }
+        #load-more {
+            text-align: center;
+            padding: 15px;
+            color: #5595BF;
+            font-size: 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #E1E8ED;
+        }
+        #load-more:hover { background-color: #F5F8FA; }
         #toast {
             position: fixed;
             top: 10px;
@@ -163,26 +185,45 @@
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
         #toast.success { background: #C8E6C9; color: #2E7D32; }
+        #status-bar {
+            background: #E1E8ED;
+            padding: 6px 15px;
+            font-size: 11px;
+            color: #8899A6;
+            border-bottom: 1px solid #E1E8ED;
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 <body>
     <div id="toast"></div>
     <div id="container">
         <div id="header">
-            <span class="bird">&#128038;</span> Oldschool Twitter
+            <div class="left"><span class="bird">&#128038;</span> Oldschool Twitter</div>
+            <button id="refresh-btn">&#8635; Aktualisieren</button>
         </div>
         <div id="feed-form">
             <input type="text" id="feed-url" placeholder="Nitter RSS-Feed URL (z.B. https://nitter.privacyredirect.com/user/rss)">
             <button id="add-btn">Feed hinzufügen</button>
         </div>
         <div id="feeds-list"></div>
+        <div id="status-bar">
+            <span id="tweet-count">0 Tweets</span>
+            <span id="last-refresh">Nie aktualisiert</span>
+        </div>
         <div id="errors"></div>
         <div class="timeline" id="timeline">
             <div class="loading">Lade Timeline...</div>
         </div>
+        <div id="load-more" style="display:none;">Weitere Tweets laden...</div>
     </div>
 
     <script>
+        let currentPage = 1;
+        let loading = false;
+        let hasMore = true;
+
         function showToast(msg, type) {
             const el = document.getElementById('toast');
             el.textContent = msg;
@@ -205,7 +246,7 @@
                     return `<span class="feed-tag" onclick="removeFeed('${encodeURIComponent(url)}')" title="${url} - Klicken zum Entfernen">@${name}</span>`;
                 }).join('');
             } catch (e) {
-                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Fehler beim Laden der Feeds</span>';
+                document.getElementById('feeds-list').innerHTML = '<span style="color:#cc0000">Fehler beim Laden</span>';
             }
         }
 
@@ -223,7 +264,7 @@
                 input.value = '';
                 showToast('Feed hinzugefügt!', 'success');
                 await loadFeeds();
-                await loadTimeline();
+                await refreshTimeline();
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
             }
@@ -239,71 +280,126 @@
                 });
                 showToast('Feed entfernt!', 'success');
                 await loadFeeds();
-                await loadTimeline();
+                await refreshTimeline();
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
             }
         }
 
-        async function loadTimeline() {
-            const container = document.getElementById('timeline');
-            container.innerHTML = '<div class="loading">Lade Timeline...</div>';
+        async function refreshTimeline() {
+            const btn = document.getElementById('refresh-btn');
+            btn.disabled = true;
+            btn.textContent = '&#8635; Lade...';
             try {
-                const res = await fetch('/api/timeline');
-                if (!res.ok) throw new Error('Server error');
+                const res = await fetch('/api/refresh', {method: 'POST'});
                 const data = await res.json();
-                const items = data.items || [];
-                const errors = data.errors || [];
-
-                let errorsHtml = '';
-                if (errors.length > 0 && items.length > 0) {
-                    errorsHtml = errors.map(e => `<div class="error-banner">&#9888; Feed-Fehler: ${e.url} - ${e.error}</div>`).join('');
-                }
-
-                if (!items.length) {
-                    if (errors.length) {
-                        errorsHtml = errors.map(e => `<div class="error-banner">&#9888; ${e.error}: <a href="${e.url}" target="_blank">${e.url}</a></div>`).join('');
-                    }
-                    container.innerHTML = errorsHtml + '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu.</div>';
-                    return;
-                }
-
-                container.innerHTML = errorsHtml + items.map(item => {
-                    const creator = item.creator || 'Unbekannt';
-                    const username = creator.replace('@', '');
-                    const profileImg = item.profile_image
-                        ? '/proxy/pic?url=' + encodeURIComponent(item.profile_image)
-                        : '';
-                    const description = item.description || item.title || '';
-                    const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
-                    const isRt = item.is_retweet;
-                    const rtCreator = item.rt_creator || '';
-
-                    return `
-                        <div class="tweet" style="overflow:auto;">
-                            ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von @${rtCreator}</div>` : ''}
-                            <div class="tweet-header">
-                                ${profileImg ? `<img class="tweet-avatar" src="${profileImg}" alt="${creator}" onerror="this.style.display='none'">` : '<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px;">${username.charAt(0).toUpperCase()}</div>'}
-                                <span class="tweet-user">${creator.replace('@','')}</span>
-                                <span class="tweet-username">${creator}</span>
-                                <span class="tweet-time">${date}</span>
-                            </div>
-                            <div class="tweet-body">${description}</div>
-                            <div class="tweet-actions">
-                                <a href="${item.link}" target="_blank">&#128279; Auf Nitter ansehen</a>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                showToast(`${data.new_tweets} neue Tweets (${data.total} gesamt)`, 'success');
+                document.getElementById('last-refresh').textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
+                currentPage = 1;
+                hasMore = true;
+                await loadTimeline();
             } catch (e) {
-                container.innerHTML = '<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>' + e.message + '</div>';
+                showToast('Fehler beim Aktualisieren', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '↻ Aktualisieren';
             }
         }
 
+        async function loadTimeline(append = false) {
+            if (loading) return;
+            loading = true;
+            const container = document.getElementById('timeline');
+
+            if (!append) {
+                container.innerHTML = '<div class="loading">Lade Timeline...</div>';
+                currentPage = 1;
+            }
+
+            try {
+                const res = await fetch(`/api/timeline?page=${currentPage}&per_page=20`);
+                if (!res.ok) throw new Error('Server error');
+                const data = await res.json();
+                const items = data.items || [];
+                hasMore = data.has_more;
+
+                document.getElementById('tweet-count').textContent = `${data.total} Tweets`;
+
+                if (!items.length && !append) {
+                    container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Klicke "Aktualisieren" um Tweets zu laden.</div>';
+                    document.getElementById('load-more').style.display = 'none';
+                    loading = false;
+                    return;
+                }
+
+                const html = items.map(item => renderTweet(item)).join('');
+                if (!append) {
+                    container.innerHTML = html;
+                } else {
+                    container.insertAdjacentHTML('beforeend', html);
+                }
+
+                document.getElementById('load-more').style.display = hasMore ? 'block' : 'none';
+            } catch (e) {
+                if (!append) {
+                    container.innerHTML = '<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>' + e.message + '</div>';
+                }
+            } finally {
+                loading = false;
+            }
+        }
+
+        function renderTweet(item) {
+            const creator = item.creator || 'Unbekannt';
+            const username = creator.replace('@', '');
+            const profileSrc = item.profile_image || '';
+            const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
+            const isRt = item.is_retweet;
+            const rtCreator = item.rt_creator || '';
+
+            let avatarHtml;
+            if (profileSrc) {
+                avatarHtml = `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="tweet-avatar" style="display:none;background:#5595BF;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
+            } else {
+                avatarHtml = `<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
+            }
+
+            return `
+                <div class="tweet" style="overflow:auto;">
+                    ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von @${rtCreator}</div>` : ''}
+                    <div class="tweet-header">
+                        ${avatarHtml}
+                        <span class="tweet-user">${username}</span>
+                        <span class="tweet-username">${creator}</span>
+                        <span class="tweet-time">${date}</span>
+                    </div>
+                    <div class="tweet-body">${item.description || item.title || ''}</div>
+                    <div class="tweet-actions">
+                        <a href="${item.link}" target="_blank">&#128279; Auf Nitter ansehen</a>
+                    </div>
+                </div>
+            `;
+        }
+
+        function loadMore() {
+            if (!hasMore || loading) return;
+            currentPage++;
+            loadTimeline(true);
+        }
+
+        // Infinite scroll
+        window.addEventListener('scroll', () => {
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200) {
+                loadMore();
+            }
+        });
+
+        document.getElementById('refresh-btn').addEventListener('click', refreshTimeline);
         document.getElementById('add-btn').addEventListener('click', addFeed);
         document.getElementById('feed-url').addEventListener('keypress', e => {
             if (e.key === 'Enter') addFeed();
         });
+        document.getElementById('load-more').addEventListener('click', loadMore);
 
         loadFeeds();
         loadTimeline();

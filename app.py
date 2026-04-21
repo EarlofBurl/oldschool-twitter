@@ -5,14 +5,20 @@ import hashlib
 import time
 import logging
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import feedparser
 import requests
 from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
-FEEDS_FILE = 'feeds.json'
+DATA_DIR = 'data'
+FEEDS_FILE = os.path.join(DATA_DIR, 'feeds.json')
+TWEETS_FILE = os.path.join(DATA_DIR, 'tweets.json')
+IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 COOKIE_CACHE = {}
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(IMAGES_DIR, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +41,18 @@ def load_feeds():
 def save_feeds(feeds):
     with open(FEEDS_FILE, 'w') as f:
         json.dump(feeds, f, indent=2)
+
+
+def load_tweets():
+    if os.path.exists(TWEETS_FILE):
+        with open(TWEETS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_tweets(tweets):
+    with open(TWEETS_FILE, 'w') as f:
+        json.dump(tweets, f, indent=2, ensure_ascii=False)
 
 
 def parse_date(date_str):
@@ -135,6 +153,44 @@ def fetch_with_anubis(url):
     return resp, session
 
 
+def download_image(url):
+    if not url:
+        return None
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    ext = '.jpg'
+    if '.png' in url.lower():
+        ext = '.png'
+    elif '.gif' in url.lower():
+        ext = '.gif'
+    elif '.webp' in url.lower():
+        ext = '.webp'
+    filename = f"{url_hash}{ext}"
+    filepath = os.path.join(IMAGES_DIR, filename)
+    if os.path.exists(filepath):
+        return f"/images/{filename}"
+    try:
+        resp, session = fetch_with_anubis(url)
+        if resp.status_code == 200 and not resp.text.startswith('<'):
+            with open(filepath, 'wb') as f:
+                f.write(resp.content)
+            return f"/images/{filename}"
+    except Exception as e:
+        logger.error(f"Failed to download image {url}: {e}")
+    return None
+
+
+def process_description_images(description):
+    def replace_img(match):
+        src = match.group(1)
+        local = download_image(src)
+        if local:
+            return f'<img src="{local}" />'
+        return match.group(0)
+
+    description = re.sub(r'<img[^>]*src="([^"]+)"[^>]*/?\s*>', replace_img, description)
+    return description
+
+
 def fetch_feed_items(url):
     try:
         resp, session = fetch_with_anubis(url)
@@ -189,9 +245,51 @@ def fetch_feed_items(url):
         return []
 
 
+def refresh_and_cache():
+    feeds = load_feeds()
+    tweets = load_tweets()
+    all_new = []
+
+    for feed_url in feeds:
+        items = fetch_feed_items(feed_url)
+        for item in items:
+            tweet_id = item.get('link', '')
+            if not tweet_id or tweet_id in tweets:
+                continue
+
+            profile_image = item.get('profile_image', '')
+            local_avatar = download_image(profile_image) if profile_image else ''
+
+            description = process_description_images(item.get('description', ''))
+
+            tweets[tweet_id] = {
+                'title': item.get('title', ''),
+                'description': description,
+                'link': tweet_id,
+                'date': item.get('date', ''),
+                'timestamp': item.get('timestamp', 0),
+                'creator': item.get('creator', ''),
+                'profile_image': local_avatar or profile_image,
+                'feed_title': item.get('feed_title', ''),
+                'feed_link': item.get('feed_link', ''),
+                'is_retweet': item.get('is_retweet', False),
+                'rt_creator': item.get('rt_creator', ''),
+            }
+            all_new.append(tweet_id)
+
+    save_tweets(tweets)
+    logger.info(f"Cached {len(all_new)} new tweets, total {len(tweets)}")
+    return len(all_new)
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(IMAGES_DIR, filename)
 
 
 @app.route('/api/feeds', methods=['GET'])
@@ -224,40 +322,41 @@ def remove_feed():
     return jsonify({'feeds': feeds})
 
 
+@app.route('/api/refresh', methods=['POST'])
+def refresh():
+    new_count = refresh_and_cache()
+    return jsonify({'new_tweets': new_count, 'total': len(load_tweets())})
+
+
 @app.route('/api/timeline', methods=['GET'])
 def get_timeline():
-    feeds = load_feeds()
-    all_items = []
-    errors = []
-    for feed_url in feeds:
-        items = fetch_feed_items(feed_url)
-        if not items:
-            errors.append({'url': feed_url, 'error': 'No items or fetch failed'})
-        all_items.extend(items)
-    all_items.sort(key=lambda x: x['timestamp'], reverse=True)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    tweets = load_tweets()
+    sorted_tweets = sorted(tweets.values(), key=lambda x: x.get('timestamp', 0), reverse=True)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_tweets = sorted_tweets[start:end]
+
     return jsonify({
-        'items': all_items[:50],
-        'feeds_count': len(feeds),
-        'errors': errors
+        'items': page_tweets,
+        'total': len(sorted_tweets),
+        'page': page,
+        'per_page': per_page,
+        'has_more': end < len(sorted_tweets)
     })
-
-
-@app.route('/proxy/pic')
-def proxy_pic():
-    url = request.args.get('url', '')
-    if not url:
-        return '', 400
-    try:
-        resp, session = fetch_with_anubis(url)
-        content_type = resp.headers.get('Content-Type', 'image/jpeg')
-        return resp.content, 200, {'Content-Type': content_type, 'Cache-Control': 'public, max-age=3600'}
-    except Exception:
-        return '', 500
 
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()}})
+    tweets = load_tweets()
+    return jsonify({
+        'status': 'ok',
+        'total_tweets': len(tweets),
+        'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()}
+    })
 
 
 if __name__ == '__main__':

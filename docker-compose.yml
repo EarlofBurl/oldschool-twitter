@@ -6,5 +6,5 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./feeds.json:/app/feeds.json
+      - ./data:/app/data
     restart: unless-stopped

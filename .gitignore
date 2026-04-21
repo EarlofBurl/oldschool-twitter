@@ -1,1 +1,4 @@
 __pycache__/
+data/tweets.json
+data/images/
+data/feeds.json
