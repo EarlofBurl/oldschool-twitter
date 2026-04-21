@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oldschool Twitter Timeline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #C6E2E8;
+            color: #333;
+        }
+        #container {
+            width: 520px;
+            margin: 0 auto;
+            background-color: #F5F8FA;
+            min-height: 100vh;
+        }
+        #header {
+            background-color: #5595BF;
+            padding: 10px 15px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #A8D5EA;
+        }
+        #header a {
+            color: white;
+            text-decoration: none;
+        }
+        #main {
+            padding: 0;
+        }
+        #feed-form {
+            background-color: #F5F8FA;
+            padding: 15px;
+            border-bottom: 1px solid #E1E8ED;
+        }
+        #feed-form input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #E1E8ED;
+            border-radius: 3px;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        #feed-form button {
+            background-color: #5595BF;
+            color: white;
+            border: 1px solid #3B7BA8;
+            padding: 8px 16px;
+            border-radius: 3px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #feed-form button:hover {
+            background-color: #3B7BA8;
+        }
+        #feeds-list {
+            background-color: #F5F8FA;
+            padding: 10px 15px;
+            border-bottom: 1px solid #E1E8ED;
+            font-size: 12px;
+        }
+        #feeds-list .feed-tag {
+            display: inline-block;
+            background-color: #E1E8ED;
+            color: #5595BF;
+            padding: 3px 8px;
+            border-radius: 12px;
+            margin: 3px 3px 3px 0;
+            cursor: pointer;
+        }
+        #feeds-list .feed-tag:hover {
+            background-color: #5595BF;
+            color: white;
+        }
+        .timeline {
+            background-color: white;
+        }
+        .tweet {
+            border-bottom: 1px solid #E1E8ED;
+            padding: 12px 15px;
+            min-height: 80px;
+        }
+        .tweet:hover {
+            background-color: #F5F8FA;
+        }
+        .tweet-header {
+            margin-bottom: 6px;
+        }
+        .tweet-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 5px;
+            float: left;
+            margin-right: 10px;
+            background-color: #E1E8ED;
+        }
+        .tweet-user {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+        .tweet-username {
+            color: #8899A6;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .tweet-time {
+            color: #8899A6;
+            font-size: 12px;
+            float: right;
+        }
+        .tweet-content {
+            margin-left: 58px;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #333;
+        }
+        .tweet-content p {
+            margin-bottom: 8px;
+        }
+        .tweet-content img {
+            max-width: 100%;
+            border-radius: 5px;
+            margin-top: 8px;
+        }
+        .tweet-content a {
+            color: #5595BF;
+        }
+        .tweet-content blockquote {
+            border-left: 3px solid #E1E8ED;
+            padding-left: 10px;
+            margin: 8px 0;
+            color: #66757F;
+        }
+        .tweet-actions {
+            margin-left: 58px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #8899A6;
+        }
+        .tweet-actions a {
+            color: #8899A6;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .tweet-actions a:hover {
+            text-decoration: underline;
+        }
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #8899A6;
+        }
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #E1E8ED;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8899A6;
+        }
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .retweet-indicator {
+            color: #8899A6;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .feed-banner {
+            background-color: #E1E8ED;
+            padding: 5px 15px;
+            font-size: 11px;
+            color: #8899A6;
+        }
+        .feed-banner a {
+            color: #5595BF;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="header">
+            <a href="/">Oldschool Twitter Timeline</a>
+        </div>
+        <div id="main">
+            <div id="feed-form">
+                <input type="text" id="feed-url" placeholder="RSS-Feed URL eingeben (z.B. https://nitter.privacyredirect.com/user/rss)">
+                <button onclick="addFeed()">Feed hinzufügen</button>
+                <div id="feeds-list"></div>
+            </div>
+            <div class="timeline" id="timeline">
+                <div class="loading">Lade Timeline...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadFeeds() {
+            try {
+                const res = await fetch('/api/feeds');
+                const feeds = await res.json();
+                const container = document.getElementById('feeds-list');
+                container.innerHTML = feeds.map(url => {
+                    const name = url.split('/').filter(Boolean).pop() || url;
+                    return `<span class="feed-tag" onclick="removeFeed('${encodeURIComponent(url)}')" title="Klicken zum Entfernen">${name}</span>`;
+                }).join('');
+            } catch (e) {
+                console.error('Feeds laden fehlgeschlagen:', e);
+            }
+        }
+
+        async function addFeed() {
+            const input = document.getElementById('feed-url');
+            const url = input.value.trim();
+            if (!url) return;
+            try {
+                await fetch('/api/feeds', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url})
+                });
+                input.value = '';
+                await loadFeeds();
+                await loadTimeline();
+            } catch (e) {
+                alert('Feed hinzufügen fehlgeschlagen');
+            }
+        }
+
+        async function removeFeed(url) {
+            if (!confirm('Feed entfernen?')) return;
+            try {
+                await fetch(`/api/feeds/${url}`, {method: 'DELETE'});
+                await loadFeeds();
+                await loadTimeline();
+            } catch (e) {
+                alert('Feed entfernen fehlgeschlagen');
+            }
+        }
+
+        async function loadTimeline() {
+            const container = document.getElementById('timeline');
+            container.innerHTML = '<div class="loading">Lade Timeline...</div>';
+            try {
+                const res = await fetch('/api/timeline');
+                const items = await res.json();
+                if (!items.length) {
+                    container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu, um die Timeline zu sehen.</div>';
+                    return;
+                }
+                container.innerHTML = items.map(item => {
+                    const creator = item.creator || 'Unbekannt';
+                    const username = creator.replace('@', '');
+                    const profileImg = item.profile_image || `https://nitter.privacyredirect.com/pic/ame-48.png`;
+                    const description = item.description || item.title || '';
+                    const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
+
+                    let content = description;
+                    content = content.replace(/<img src="https:\/\/nitter\.privacyredirect\.com\/pic\/media([^"]*)"[^>]*>/g, '<img src="https://nitter.privacyredirect.com/pic/media$1">');
+                    content = content.replace(/<a href="https:\/\/nitter\.privacyredirect\.com\/([^"]*#m)">/g, '<a href="https://nitter.privacyredirect.com/$1">');
+                    content = content.replace(/<a href="([^"]*nitter[^"]*)"[^>]*>/g, '<a href="$1" target="_blank">');
+
+                    const isRetweet = item.title && item.title.startsWith('RT by');
+                    const rtMatch = description.match(/RT by @([^:]+):/);
+                    const rtCreator = rtMatch ? rtMatch[1] : '';
+
+                    return `
+                        <div class="tweet">
+                            ${isRetweet ? `<div class="retweet-indicator">↳ RT by @${rtCreator}</div>` : ''}
+                            <div class="tweet-header">
+                                <img class="tweet-avatar" src="${profileImg}" alt="${creator}" onerror="this.src='https://nitter.privacyredirect.com/pic/ame-48.png'">
+                                <span class="tweet-user">${creator}</span>
+                                <span class="tweet-time">${date}</span>
+                            </div>
+                            <div class="tweet-content">${content}</div>
+                            <div class="tweet-actions">
+                                <a href="${item.link}" target="_blank">Auf Nitter ansehen</a>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                container.innerHTML = '<div class="error">Timeline konnte nicht geladen werden.</div>';
+            }
+        }
+
+        loadFeeds();
+        loadTimeline();
+        setInterval(loadTimeline, 60000);
+    </script>
+</body>
+</html>
