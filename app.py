@@ -571,6 +571,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/profile')
+def profile():
+    return render_template('profile.html')
+
+
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(IMAGES_DIR, filename)
@@ -579,6 +584,114 @@ def serve_image(filename):
 @app.route('/api/feeds', methods=['GET'])
 def get_feeds():
     return jsonify(load_feeds())
+
+
+@app.route('/api/feeds/profiles', methods=['GET'])
+def get_feed_profiles():
+    feeds = load_feeds()
+    tweets = load_tweets()
+    profiles = {}
+    for tweet in tweets.values():
+        feed_link = tweet.get('feed_link', '')
+        if not feed_link:
+            continue
+        if feed_link not in profiles:
+            profiles[feed_link] = {
+                'feed_link': feed_link,
+                'feed_title': tweet.get('feed_title', feed_link),
+                'creator': tweet.get('creator', ''),
+                'profile_image': tweet.get('profile_image', ''),
+                'tweet_count': 0,
+                'latest_timestamp': 0,
+                'is_subscribed': feed_link in feeds,
+            }
+        profiles[feed_link]['tweet_count'] += 1
+        if tweet.get('timestamp', 0) > profiles[feed_link]['latest_timestamp']:
+            profiles[feed_link]['latest_timestamp'] = tweet.get('timestamp', 0)
+            profiles[feed_link]['creator'] = tweet.get('creator', profiles[feed_link]['creator'])
+            profiles[feed_link]['profile_image'] = tweet.get('profile_image', profiles[feed_link]['profile_image'])
+            profiles[feed_link]['feed_title'] = tweet.get('feed_title', profiles[feed_link]['feed_title'])
+    return jsonify(list(profiles.values()))
+
+
+@app.route('/api/search')
+def search():
+    q = request.args.get('q', '').strip().lower()
+    if not q:
+        return jsonify({'tweets': [], 'profiles': []})
+
+    tweets = load_tweets()
+    feeds = load_feeds()
+
+    matched_tweets = []
+    for tweet in tweets.values():
+        creator = tweet.get('creator', '').lower()
+        title = tweet.get('title', '').lower()
+        feed_title = tweet.get('feed_title', '').lower()
+        description = tweet.get('description', '').lower()
+        if q in creator or q in title or q in feed_title or q in description:
+            matched_tweets.append(tweet)
+
+    matched_tweets.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+
+    profiles = {}
+    for tweet in matched_tweets:
+        feed_link = tweet.get('feed_link', '')
+        if feed_link and feed_link not in profiles:
+            profiles[feed_link] = {
+                'feed_link': feed_link,
+                'feed_title': tweet.get('feed_title', feed_link),
+                'creator': tweet.get('creator', ''),
+                'profile_image': tweet.get('profile_image', ''),
+                'tweet_count': sum(1 for t in tweets.values() if t.get('feed_link') == feed_link),
+                'is_subscribed': feed_link in feeds,
+            }
+
+    return jsonify({
+        'tweets': matched_tweets[:50],
+        'profiles': list(profiles.values()),
+        'query': q,
+        'total_tweets': len(matched_tweets),
+    })
+
+
+@app.route('/api/profile/<path:feed_url>')
+def get_profile(feed_url):
+    if not feed_url.startswith('http'):
+        feed_url = 'https://' + feed_url
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    tweets = load_tweets()
+    feeds = load_feeds()
+
+    feed_tweets = [t for t in tweets.values() if t.get('feed_link') == feed_url]
+    feed_tweets.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+
+    creator = ''
+    profile_image = ''
+    feed_title = feed_url
+    if feed_tweets:
+        creator = feed_tweets[0].get('creator', '')
+        profile_image = feed_tweets[0].get('profile_image', '')
+        feed_title = feed_tweets[0].get('feed_title', feed_url)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_tweets = feed_tweets[start:end]
+
+    return jsonify({
+        'items': page_tweets,
+        'total': len(feed_tweets),
+        'page': page,
+        'per_page': per_page,
+        'has_more': end < len(feed_tweets),
+        'feed_url': feed_url,
+        'feed_title': feed_title,
+        'creator': creator,
+        'profile_image': profile_image,
+        'is_subscribed': feed_url in feeds,
+    })
 
 
 @app.route('/api/feeds', methods=['POST'])

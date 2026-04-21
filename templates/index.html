@@ -64,6 +64,7 @@
             border-right: 1px solid #E1E8ED;
             box-shadow: 0 0 15px rgba(0,0,0,0.1);
         }
+        #main.search-open { margin-top: 95px; }
 
         /* --- Sidebar --- */
         #sidebar {
@@ -153,6 +154,80 @@
             background: rgba(0,0,0,0.3); z-index: 85; display: none;
         }
         .sidebar-overlay.open { display: block; }
+
+        /* --- Search Bar --- */
+        #search-bar {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            z-index: 95;
+            background: white;
+            border-bottom: 1px solid #E1E8ED;
+            padding: 8px 20px;
+            display: none;
+        }
+        #search-bar.open { display: flex; gap: 8px; align-items: center; }
+        #search-bar input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #E1E8ED;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        #search-bar input:focus { outline: none; border-color: #5595BF; }
+        #search-bar .search-close {
+            background: none; border: none; font-size: 20px; cursor: pointer; color: #8899A6;
+        }
+        #search-results {
+            position: fixed;
+            top: 95px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            max-width: 100%;
+            max-height: 70vh;
+            background: white;
+            border: 1px solid #E1E8ED;
+            border-radius: 0 0 8px 8px;
+            z-index: 96;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        #search-results.open { display: block; }
+        .search-profile {
+            padding: 10px 15px;
+            border-bottom: 1px solid #E1E8ED;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .search-profile:hover { background: #F5F8FA; }
+        .search-profile img {
+            width: 40px; height: 40px; border-radius: 5px; margin-right: 10px; background: #E1E8ED;
+        }
+        .search-profile .sp-name { font-weight: bold; color: #333; font-size: 14px; }
+        .search-profile .sp-handle { color: #8899A6; font-size: 12px; }
+        .search-profile .sp-count { color: #8899A6; font-size: 12px; margin-left: auto; }
+        .search-tweet {
+            padding: 10px 15px;
+            border-bottom: 1px solid #E1E8ED;
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+        }
+        .search-tweet:hover { background: #F5F8FA; }
+        .search-tweet .st-creator { font-weight: bold; }
+        .search-tweet .st-text { color: #66757F; margin-top: 4px; }
+        .search-section-header {
+            padding: 8px 15px;
+            background: #F5F8FA;
+            font-size: 12px;
+            font-weight: bold;
+            color: #8899A6;
+            border-bottom: 1px solid #E1E8ED;
+        }
 
         /* --- Status Bar --- */
         #status-bar {
@@ -378,11 +453,18 @@
             <span class="bird">&#128038;</span> Oldschool Twitter
         </div>
         <div style="display:flex;align-items:center;">
+            <button class="nav-btn" onclick="toggleSearch()">&#128269; Suche</button>
             <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776; Feeds</button>
             <button class="nav-btn" id="refresh-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
             <button class="nav-btn" id="hard-refresh-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
         </div>
     </div>
+
+    <div id="search-bar">
+        <input type="text" id="search-input" placeholder="Suche nach User, Feed oder Inhalt..." oninput="doSearch(this.value)">
+        <button class="search-close" onclick="toggleSearch()">&times;</button>
+    </div>
+    <div id="search-results"></div>
 
     <div id="sidebar">
         <div class="sidebar-header">
@@ -414,6 +496,69 @@
         let sidebarOpen = false;
         let lightboxImages = [];
         let lightboxIndex = 0;
+        let searchOpen = false;
+        let searchTimeout = null;
+
+        function toggleSearch() {
+            searchOpen = !searchOpen;
+            document.getElementById('search-bar').classList.toggle('open', searchOpen);
+            document.getElementById('search-results').classList.toggle('open', searchOpen);
+            document.getElementById('main').classList.toggle('search-open', searchOpen);
+            if (searchOpen) {
+                document.getElementById('search-input').focus();
+            } else {
+                document.getElementById('search-input').value = '';
+                document.getElementById('search-results').innerHTML = '';
+            }
+        }
+
+        function doSearch(query) {
+            clearTimeout(searchTimeout);
+            if (!query.trim()) {
+                document.getElementById('search-results').innerHTML = '';
+                return;
+            }
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
+                    const data = await res.json();
+                    let html = '';
+                    if (data.profiles.length > 0) {
+                        html += '<div class="search-section-header">Profile / Feeds</div>';
+                        html += data.profiles.map(p => `
+                            <div class="search-profile" onclick="goToProfile('${encodeURIComponent(p.feed_link)}')">
+                                ${p.profile_image ? `<img src="${p.profile_image}" onerror="this.style.display='none'">` : '<div style="width:40px;height:40px;border-radius:5px;background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;margin-right:10px;flex-shrink:0">${(p.creator||'?').charAt(0).toUpperCase()}</div>'}
+                                <div>
+                                    <div class="sp-name">${p.creator || p.feed_title}</div>
+                                    <div class="sp-handle">${p.feed_title}</div>
+                                </div>
+                                <span class="sp-count">${p.tweet_count} Tweets${p.is_subscribed ? ' &#10003;' : ''}</span>
+                            </div>
+                        `).join('');
+                    }
+                    if (data.tweets.length > 0) {
+                        html += '<div class="search-section-header">Tweets</div>';
+                        html += data.tweets.slice(0, 10).map(t => `
+                            <div class="search-tweet" onclick="goToProfile('${encodeURIComponent(t.feed_link)}')">
+                                <span class="st-creator">${t.creator}</span>
+                                <span style="color:#8899A6;font-size:12px;margin-left:8px">${t.date ? new Date(t.date).toLocaleDateString('de-DE') : ''}</span>
+                                <div class="st-text">${(t.description || t.title || '').replace(/<[^>]*>/g, '').substring(0, 120)}</div>
+                            </div>
+                        `).join('');
+                    }
+                    if (!data.profiles.length && !data.tweets.length) {
+                        html = '<div style="padding:20px;text-align:center;color:#8899A6">Keine Ergebnisse</div>';
+                    }
+                    document.getElementById('search-results').innerHTML = html;
+                } catch (e) {
+                    document.getElementById('search-results').innerHTML = '<div style="padding:20px;color:#cc0000">Suche fehlgeschlagen</div>';
+                }
+            }, 300);
+        }
+
+        function goToProfile(feedUrl) {
+            window.location.href = `/profile?feed=${feedUrl}`;
+        }
 
         function toggleSidebar() {
             sidebarOpen = !sidebarOpen;
@@ -479,7 +624,7 @@
                     const name = parts[parts.length - 1] === 'rss' ? parts[parts.length - 2] : parts[parts.length - 1];
                     return `
                         <div class="feed-item">
-                            <div>
+                            <div style="cursor:pointer" onclick="goToProfile('${encodeURIComponent(url)}')">
                                 <span class="feed-name">@${name}</span>
                                 <span class="feed-url">${url}</span>
                             </div>
@@ -664,7 +809,7 @@
                     ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von ${rtCreator}</div>` : ''}
                     <div class="tweet-header">
                         ${avatarHtml}
-                        <span class="tweet-user">${username}</span>
+                        <span class="tweet-user" style="cursor:pointer" onclick="goToProfile('${encodeURIComponent(item.feed_link || '')}')">${username}</span>
                         <span class="tweet-username">${creator}</span>
                         <span class="tweet-time">${date}</span>
                     </div>
