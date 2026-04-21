@@ -6,431 +6,122 @@
     <title>Oldschool Twitter Timeline</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body {
-            background-color: #C6E2E8;
-            color: #333;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-        #header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            background-color: #5595BF;
-            border-bottom: 2px solid #3B7BA8;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 20px;
-            height: 50px;
-        }
-        #header .left {
-            display: flex;
-            align-items: center;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #header .bird { font-size: 26px; margin-right: 10px; }
-        #header .nav-btn {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 6px 14px;
-            border-radius: 3px;
-            font-size: 13px;
-            cursor: pointer;
-            margin-left: 8px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        #header .nav-btn:hover { background: rgba(255,255,255,0.3); }
-        #header .nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        #header .nav-btn.active { background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.6); }
+        html, body { background-color: #C6E2E8; color: #333; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; min-height: 100vh; }
+
+        /* --- Header --- */
+        #header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background-color: #5595BF; border-bottom: 2px solid #3B7BA8; display: flex; align-items: center; height: 50px; padding: 0 15px; }
+        #header .left { display: flex; align-items: center; color: white; font-size: 18px; font-weight: bold; cursor: pointer; flex-shrink: 0; }
+        #header .bird { font-size: 26px; margin-right: 8px; }
+        .header-spacer { flex: 1; }
+        .nav-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 5px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; margin-left: 6px; white-space: nowrap; }
+        .nav-btn:hover { background: rgba(255,255,255,0.3); }
+        .nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .nav-btn.active { background: rgba(255,255,255,0.35); }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spinning { animation: spin 1s linear infinite; display: inline-block; }
-        #main {
-            margin-top: 50px;
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-            background-color: white;
-            min-height: calc(100vh - 50px);
-            border-left: 1px solid #E1E8ED;
-            border-right: 1px solid #E1E8ED;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-        }
-        #main.search-open { margin-top: 95px; }
 
-        /* --- Sidebar --- */
-        #sidebar {
-            position: fixed;
-            top: 50px;
-            left: 0;
-            bottom: 0;
-            width: 300px;
-            background: #F5F8FA;
-            border-right: 1px solid #E1E8ED;
-            z-index: 90;
-            transform: translateX(-100%);
-            transition: transform 0.25s ease;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
+        /* --- Search --- */
+        #search-bar { position: fixed; top: 50px; left: 0; right: 0; z-index: 95; background: white; border-bottom: 1px solid #E1E8ED; padding: 8px 15px; display: none; }
+        #search-bar.open { display: flex; gap: 8px; align-items: center; }
+        #search-input { flex: 1; padding: 8px 12px; border: 1px solid #E1E8ED; border-radius: 20px; font-size: 14px; }
+        #search-input:focus { outline: none; border-color: #5595BF; }
+        .search-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #8899A6; }
+        #search-results { position: fixed; top: 95px; left: 50%; transform: translateX(-50%); width: 800px; max-width: 95vw; max-height: 70vh; background: white; border: 1px solid #E1E8ED; border-radius: 0 0 8px 8px; z-index: 96; overflow-y: auto; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        #search-results.open { display: block; }
+        .sr-header { padding: 8px 15px; background: #F5F8FA; font-size: 12px; font-weight: bold; color: #8899A6; border-bottom: 1px solid #E1E8ED; }
+        .sr-profile { padding: 10px 15px; border-bottom: 1px solid #E1E8ED; display: flex; align-items: center; cursor: pointer; }
+        .sr-profile:hover { background: #F5F8FA; }
+        .sr-profile img { width: 40px; height: 40px; border-radius: 5px; margin-right: 10px; background: #E1E8ED; flex-shrink: 0; }
+        .sr-profile .sr-name { font-weight: bold; color: #333; font-size: 14px; }
+        .sr-profile .sr-handle { color: #8899A6; font-size: 12px; }
+        .sr-profile .sr-count { color: #8899A6; font-size: 12px; margin-left: auto; }
+        .sr-tweet { padding: 10px 15px; border-bottom: 1px solid #E1E8ED; font-size: 13px; cursor: pointer; }
+        .sr-tweet:hover { background: #F5F8FA; }
+        .sr-tweet .sr-t-creator { font-weight: bold; }
+        .sr-tweet .sr-t-text { color: #66757F; margin-top: 4px; }
+
+        /* --- Sidebar (right side) --- */
+        #sidebar { position: fixed; top: 50px; right: 0; bottom: 0; width: 300px; background: #F5F8FA; border-left: 1px solid #E1E8ED; z-index: 90; transform: translateX(100%); transition: transform 0.25s ease; overflow-y: auto; display: flex; flex-direction: column; }
         #sidebar.open { transform: translateX(0); }
-        #sidebar .sidebar-header {
-            padding: 15px;
-            border-bottom: 1px solid #E1E8ED;
-            font-weight: bold;
-            font-size: 15px;
-            color: #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #sidebar .sidebar-header .close-btn {
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: #8899A6;
-        }
-        #sidebar .sidebar-header .close-btn:hover { color: #333; }
-        #sidebar .feed-add {
-            padding: 12px 15px;
-            border-bottom: 1px solid #E1E8ED;
-        }
-        #sidebar .feed-add input[type="text"] {
-            width: 100%;
-            padding: 8px 10px;
-            border: 1px solid #E1E8ED;
-            border-radius: 3px;
-            font-size: 13px;
-            margin-bottom: 6px;
-        }
-        #sidebar .feed-add input[type="text"]:focus {
-            outline: none;
-            border-color: #5595BF;
-        }
-        #sidebar .feed-add button {
-            background-color: #5595BF;
-            color: white;
-            border: 1px solid #3B7BA8;
-            padding: 6px 14px;
-            border-radius: 3px;
-            font-size: 13px;
-            cursor: pointer;
-            width: 100%;
-        }
-        #sidebar .feed-add button:hover { background-color: #3B7BA8; }
-        #sidebar .feed-hint {
-            font-size: 11px;
-            color: #8899A6;
-            margin-top: 6px;
-        }
-        #sidebar .feed-list { flex: 1; overflow-y: auto; }
-        #sidebar .feed-item {
-            padding: 10px 15px;
-            border-bottom: 1px solid #E1E8ED;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        #sidebar .feed-item:hover { background: #E1E8ED; }
-        #sidebar .feed-item .feed-name { font-weight: bold; color: #333; font-size: 14px; }
-        #sidebar .feed-item .feed-url { font-size: 11px; color: #8899A6; display: block; margin-top: 2px; word-break: break-all; }
-        #sidebar .feed-item .feed-delete {
-            background: none; border: none; color: #8899A6; font-size: 18px;
-            cursor: pointer; padding: 4px 8px; border-radius: 3px; flex-shrink: 0;
-        }
-        #sidebar .feed-item .feed-delete:hover { color: #C62828; background: #FFEBEE; }
-        .sidebar-overlay {
-            position: fixed; top: 50px; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.3); z-index: 85; display: none;
-        }
+        .sidebar-header { padding: 15px; border-bottom: 1px solid #E1E8ED; font-weight: bold; font-size: 15px; color: #333; display: flex; justify-content: space-between; align-items: center; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #8899A6; }
+        .close-btn:hover { color: #333; }
+        .feed-add { padding: 12px 15px; border-bottom: 1px solid #E1E8ED; }
+        .feed-add input { width: 100%; padding: 8px 10px; border: 1px solid #E1E8ED; border-radius: 3px; font-size: 13px; margin-bottom: 6px; }
+        .feed-add input:focus { outline: none; border-color: #5595BF; }
+        .feed-add button { background-color: #5595BF; color: white; border: 1px solid #3B7BA8; padding: 6px 14px; border-radius: 3px; font-size: 13px; cursor: pointer; width: 100%; }
+        .feed-add button:hover { background-color: #3B7BA8; }
+        .feed-hint { font-size: 11px; color: #8899A6; margin-top: 6px; }
+        .feed-list { flex: 1; overflow-y: auto; }
+        .feed-item { padding: 10px 15px; border-bottom: 1px solid #E1E8ED; display: flex; align-items: center; justify-content: space-between; }
+        .feed-item:hover { background: #E1E8ED; }
+        .feed-name { font-weight: bold; color: #333; font-size: 14px; }
+        .feed-url { font-size: 11px; color: #8899A6; display: block; margin-top: 2px; word-break: break-all; }
+        .feed-delete { background: none; border: none; color: #8899A6; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 3px; flex-shrink: 0; }
+        .feed-delete:hover { color: #C62828; background: #FFEBEE; }
+        .sidebar-overlay { position: fixed; top: 50px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 85; display: none; }
         .sidebar-overlay.open { display: block; }
 
-        /* --- Search Bar --- */
-        #search-bar {
-            position: fixed;
-            top: 50px;
-            left: 0;
-            right: 0;
-            z-index: 95;
-            background: white;
-            border-bottom: 1px solid #E1E8ED;
-            padding: 8px 20px;
-            display: none;
-        }
-        #search-bar.open { display: flex; gap: 8px; align-items: center; }
-        #search-bar input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #E1E8ED;
-            border-radius: 20px;
-            font-size: 14px;
-        }
-        #search-bar input:focus { outline: none; border-color: #5595BF; }
-        #search-bar .search-close {
-            background: none; border: none; font-size: 20px; cursor: pointer; color: #8899A6;
-        }
-        #search-results {
-            position: fixed;
-            top: 95px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 800px;
-            max-width: 100%;
-            max-height: 70vh;
-            background: white;
-            border: 1px solid #E1E8ED;
-            border-radius: 0 0 8px 8px;
-            z-index: 96;
-            overflow-y: auto;
-            display: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        #search-results.open { display: block; }
-        .search-profile {
-            padding: 10px 15px;
-            border-bottom: 1px solid #E1E8ED;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-        }
-        .search-profile:hover { background: #F5F8FA; }
-        .search-profile img {
-            width: 40px; height: 40px; border-radius: 5px; margin-right: 10px; background: #E1E8ED;
-        }
-        .search-profile .sp-name { font-weight: bold; color: #333; font-size: 14px; }
-        .search-profile .sp-handle { color: #8899A6; font-size: 12px; }
-        .search-profile .sp-count { color: #8899A6; font-size: 12px; margin-left: auto; }
-        .search-tweet {
-            padding: 10px 15px;
-            border-bottom: 1px solid #E1E8ED;
-            font-size: 13px;
-            color: #333;
-            cursor: pointer;
-        }
-        .search-tweet:hover { background: #F5F8FA; }
-        .search-tweet .st-creator { font-weight: bold; }
-        .search-tweet .st-text { color: #66757F; margin-top: 4px; }
-        .search-section-header {
-            padding: 8px 15px;
-            background: #F5F8FA;
-            font-size: 12px;
-            font-weight: bold;
-            color: #8899A6;
-            border-bottom: 1px solid #E1E8ED;
-        }
-
-        /* --- Status Bar --- */
-        #status-bar {
-            background: #E1E8ED;
-            padding: 6px 20px;
-            font-size: 11px;
-            color: #8899A6;
-            border-bottom: 1px solid #E1E8ED;
-            display: flex;
-            justify-content: space-between;
-        }
+        /* --- Main --- */
+        #main { margin-top: 50px; max-width: 800px; margin-left: auto; margin-right: auto; background-color: white; min-height: calc(100vh - 50px); border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+        #main.search-open { margin-top: 95px; }
+        #status-bar { background: #E1E8ED; padding: 6px 20px; font-size: 11px; color: #8899A6; border-bottom: 1px solid #E1E8ED; display: flex; justify-content: space-between; }
 
         /* --- Timeline --- */
         .timeline { background-color: white; }
-        .tweet {
-            border-bottom: 1px solid #E1E8ED;
-            padding: 12px 20px;
-        }
+        .tweet { border-bottom: 1px solid #E1E8ED; padding: 12px 20px; }
         .tweet:hover { background-color: #F9FBFC; }
-        .tweet-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 5px;
-            float: left;
-            margin-right: 12px;
-            background-color: #E1E8ED;
-        }
-        .tweet-header {
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-        }
-        .tweet-user { font-weight: bold; color: #333; font-size: 14px; }
+        .tweet-avatar { width: 48px; height: 48px; border-radius: 5px; float: left; margin-right: 12px; background-color: #E1E8ED; }
+        .tweet-header { margin-bottom: 4px; display: flex; align-items: center; }
+        .tweet-user { font-weight: bold; color: #333; font-size: 14px; cursor: pointer; }
+        .tweet-user:hover { color: #5595BF; }
         .tweet-username { color: #8899A6; font-size: 13px; margin-left: 4px; }
         .tweet-time { color: #8899A6; font-size: 12px; margin-left: auto; }
-        .tweet-body {
-            margin-left: 60px;
-            font-size: 14px;
-            line-height: 1.5;
-            color: #333;
-        }
+        .tweet-body { margin-left: 60px; font-size: 14px; line-height: 1.5; color: #333; }
         .tweet-body p { margin-bottom: 6px; }
         .tweet-body a { color: #5595BF !important; text-decoration: none; }
         .tweet-body a:hover { text-decoration: underline; }
-        .tweet-body blockquote {
-            border-left: 3px solid #E1E8ED;
-            padding: 8px 12px;
-            margin: 8px 0;
-            color: #66757F;
-            background: #F5F8FA;
-            border-radius: 0 5px 5px 0;
-        }
+        .tweet-body blockquote { border-left: 3px solid #E1E8ED; padding: 8px 12px; margin: 8px 0; color: #66757F; background: #F5F8FA; border-radius: 0 5px 5px 0; }
         .tweet-body blockquote b { color: #333; }
-        .tweet-actions {
-            margin-left: 60px;
-            margin-top: 6px;
-            font-size: 12px;
-            color: #8899A6;
-        }
+        .tweet-actions { margin-left: 60px; margin-top: 6px; font-size: 12px; color: #8899A6; }
         .tweet-actions a { color: #8899A6; text-decoration: none; }
         .tweet-actions a:hover { color: #5595BF; }
-        .retweet-indicator {
-            color: #8899A6;
-            font-size: 12px;
-            margin-bottom: 4px;
-            margin-left: 60px;
-        }
+        .retweet-indicator { color: #8899A6; font-size: 12px; margin-bottom: 4px; margin-left: 60px; }
 
-        /* --- Image Gallery --- */
-        .img-gallery {
-            display: grid;
-            gap: 4px;
-            margin-top: 8px;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .img-gallery.g1 { grid-template-columns: 1fr; max-width: 500px; }
+        /* --- Gallery --- */
+        .img-gallery { display: grid; gap: 3px; margin-top: 8px; border-radius: 8px; overflow: hidden; }
+        .img-gallery.g1 { grid-template-columns: 1fr; }
         .img-gallery.g2 { grid-template-columns: 1fr 1fr; }
         .img-gallery.g3 { grid-template-columns: 1fr 1fr; }
         .img-gallery.g4 { grid-template-columns: 1fr 1fr; }
         .img-gallery.g3 .gi:first-child { grid-column: 1 / -1; }
         .img-gallery.g4 .gi:first-child { grid-column: 1 / -1; }
-        .img-gallery.g5, .img-gallery.g6, .img-gallery.g7, .img-gallery.g8, .img-gallery.g9 {
-            grid-template-columns: 1fr 1fr 1fr;
-        }
-        .gi {
-            position: relative;
-            cursor: pointer;
-            overflow: hidden;
-            background: #E1E8ED;
-        }
-        .gi img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            transition: filter 0.15s;
-        }
+        .img-gallery.g5,.img-gallery.g6,.img-gallery.g7,.img-gallery.g8,.img-gallery.g9 { grid-template-columns: 1fr 1fr 1fr; }
+        .gi { position: relative; cursor: pointer; overflow: hidden; background: #E1E8ED; }
+        .gi img { width: 100%; display: block; transition: filter 0.15s; }
         .gi:hover img { filter: brightness(0.85); }
-        .gi.more-overlay::after {
-            content: attr(data-more);
-            position: absolute;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .gi.video-thumb::before {
-            content: '▶';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.6);
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            z-index: 1;
-            pointer-events: none;
-        }
-        .img-gallery.g1 .gi { height: 280px; }
-        .img-gallery.g2 .gi { height: 200px; }
-        .img-gallery.g3 .gi:first-child { height: 220px; }
-        .img-gallery.g3 .gi:not(:first-child) { height: 180px; }
-        .img-gallery.g4 .gi:first-child { height: 180px; }
-        .img-gallery.g4 .gi:not(:first-child) { height: 160px; }
-        .img-gallery.g5 .gi, .img-gallery.g6 .gi, .img-gallery.g7 .gi, .img-gallery.g8 .gi, .img-gallery.g9 .gi {
-            height: 140px;
-        }
+        .gi.more-overlay::after { content: attr(data-more); position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; }
+        .gi.video-thumb::before { content: '\25B6'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.6); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 1; pointer-events: none; }
+        .img-gallery.g1 .gi { max-height: 400px; }
+        .img-gallery.g1 .gi img { max-height: 400px; object-fit: contain; background: #000; }
+        .img-gallery:not(.g1) .gi img { height: 100%; min-height: 120px; max-height: 220px; object-fit: cover; }
 
         /* --- Lightbox --- */
-        .lightbox {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.9);
-            z-index: 500;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+        .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox.open { display: flex; }
-        .lightbox img {
-            max-width: 90vw;
-            max-height: 80vh;
-            object-fit: contain;
-            border-radius: 4px;
-        }
-        .lightbox-close {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            background: none;
-            border: none;
-            color: white;
-            font-size: 36px;
-            cursor: pointer;
-            z-index: 510;
-        }
-        .lightbox-close:hover { color: #ccc; }
-        .lightbox-nav {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            background: rgba(255,255,255,0.15);
-            border: none;
-            color: white;
-            font-size: 40px;
-            cursor: pointer;
-            padding: 15px 20px;
-            border-radius: 5px;
-            z-index: 510;
-        }
-        .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
-        .lightbox-prev { left: 15px; }
-        .lightbox-next { right: 15px; }
-        .lightbox-counter {
-            position: absolute;
-            bottom: 20px;
-            color: white;
-            font-size: 14px;
-            background: rgba(0,0,0,0.5);
-            padding: 6px 14px;
-            border-radius: 20px;
-        }
+        .lightbox img { max-width: 92vw; max-height: 82vh; object-fit: contain; }
+        .lb-close { position: absolute; top: 12px; right: 18px; background: none; border: none; color: white; font-size: 34px; cursor: pointer; z-index: 510; }
+        .lb-close:hover { color: #ccc; }
+        .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.12); border: none; color: white; font-size: 36px; cursor: pointer; padding: 12px 18px; border-radius: 4px; z-index: 510; }
+        .lb-nav:hover { background: rgba(255,255,255,0.25); }
+        .lb-prev { left: 12px; }
+        .lb-next { right: 12px; }
+        .lb-counter { position: absolute; bottom: 18px; color: white; font-size: 14px; background: rgba(0,0,0,0.5); padding: 5px 14px; border-radius: 20px; }
 
         .loading { text-align: center; padding: 40px; color: #8899A6; }
         .empty-state { text-align: center; padding: 50px 20px; color: #8899A6; }
         .empty-state h3 { margin-bottom: 10px; color: #333; font-size: 16px; }
-        #toast {
-            position: fixed; top: 60px; right: 10px; padding: 10px 20px;
-            border-radius: 5px; font-size: 13px; z-index: 200;
-            display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-width: 400px;
-        }
+        #toast { position: fixed; top: 60px; right: 10px; padding: 10px 20px; border-radius: 5px; font-size: 13px; z-index: 200; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-width: 400px; }
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
         #toast.success { background: #C8E6C9; color: #2E7D32; }
@@ -438,410 +129,235 @@
 </head>
 <body>
     <div id="toast"></div>
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <div class="lightbox" id="lightbox">
-        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
-        <button class="lightbox-nav lightbox-prev" onclick="lightboxNav(-1)">&#8249;</button>
-        <button class="lightbox-nav lightbox-next" onclick="lightboxNav(1)">&#8250;</button>
-        <img id="lightbox-img" src="" alt="">
-        <div class="lightbox-counter" id="lightbox-counter"></div>
+        <button class="lb-close" onclick="closeLightbox()">&times;</button>
+        <button class="lb-nav lb-prev" onclick="lbNav(-1)">&#8249;</button>
+        <button class="lb-nav lb-next" onclick="lbNav(1)">&#8250;</button>
+        <img id="lb-img" src="" alt="">
+        <div class="lb-counter" id="lb-counter"></div>
     </div>
 
     <div id="header">
-        <div class="left" onclick="toggleSidebar()">
+        <div class="left" onclick="location.href='/'">
             <span class="bird">&#128038;</span> Oldschool Twitter
         </div>
-        <div style="display:flex;align-items:center;">
-            <button class="nav-btn" onclick="toggleSearch()">&#128269; Suche</button>
-            <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776; Feeds</button>
-            <button class="nav-btn" id="refresh-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
-            <button class="nav-btn" id="hard-refresh-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
-        </div>
+        <div class="header-spacer"></div>
+        <button class="nav-btn" onclick="refreshTimeline(false)">&#8635; Aktualisieren</button>
+        <button class="nav-btn" onclick="refreshTimeline(true)">&#8635;&#8635; Force</button>
+        <button class="nav-btn" onclick="toggleSearch()">&#128269;</button>
+        <button class="nav-btn" id="feeds-btn" onclick="toggleSidebar()">&#9776;</button>
     </div>
 
     <div id="search-bar">
-        <input type="text" id="search-input" placeholder="Suche nach User, Feed oder Inhalt..." oninput="doSearch(this.value)">
+        <input type="text" id="search-input" placeholder="Suche nach User oder Inhalt..." oninput="doSearch(this.value)">
         <button class="search-close" onclick="toggleSearch()">&times;</button>
     </div>
     <div id="search-results"></div>
 
     <div id="sidebar">
-        <div class="sidebar-header">
-            Abonnierte Feeds
-            <button class="close-btn" onclick="toggleSidebar()">&times;</button>
-        </div>
+        <div class="sidebar-header">Abonnierte Feeds <button class="close-btn" onclick="toggleSidebar()">&times;</button></div>
         <div class="feed-add">
-            <input type="text" id="feed-url" placeholder="Nitter Profil-URL oder RSS-URL">
-            <button id="add-btn" onclick="addFeed()">Feed hinzufügen</button>
-            <div class="feed-hint">Profil: https://nitter.net/user | RSS: https://nitter.net/user/rss<br>Min. 10 Min zwischen Aktualisierungen.</div>
+            <input type="text" id="feed-url" placeholder="Nitter Profil- oder RSS-URL" onkeypress="if(event.key==='Enter')addFeed()">
+            <button onclick="addFeed()">Feed hinzufugen</button>
+            <div class="feed-hint">Min. 10 Min zwischen Aktualisierungen.</div>
         </div>
         <div class="feed-list" id="feed-list"></div>
     </div>
 
     <div id="main">
         <div id="status-bar">
-            <span id="tweet-count">0 Tweets geladen</span>
+            <span id="tweet-count">0 Tweets</span>
             <span id="last-refresh">Nie aktualisiert</span>
         </div>
-        <div class="timeline" id="timeline">
-            <div class="loading">Lade Timeline...</div>
-        </div>
+        <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
     </div>
 
-    <script>
-        let currentPage = 1;
-        let loading = false;
-        let hasMore = false;
-        let sidebarOpen = false;
-        let lightboxImages = [];
-        let lightboxIndex = 0;
-        let searchOpen = false;
-        let searchTimeout = null;
+<script>
+var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0;
 
-        function toggleSearch() {
-            searchOpen = !searchOpen;
-            document.getElementById('search-bar').classList.toggle('open', searchOpen);
-            document.getElementById('search-results').classList.toggle('open', searchOpen);
-            document.getElementById('main').classList.toggle('search-open', searchOpen);
-            if (searchOpen) {
-                document.getElementById('search-input').focus();
-            } else {
-                document.getElementById('search-input').value = '';
-                document.getElementById('search-results').innerHTML = '';
-            }
-        }
+function toggleSidebar(){
+    sidebarOpen=!sidebarOpen;
+    document.getElementById('sidebar').classList.toggle('open',sidebarOpen);
+    document.getElementById('sidebar-overlay').classList.toggle('open',sidebarOpen);
+    document.getElementById('feeds-btn').classList.toggle('active',sidebarOpen);
+    if(sidebarOpen) loadFeeds();
+}
 
-        function doSearch(query) {
-            clearTimeout(searchTimeout);
-            if (!query.trim()) {
-                document.getElementById('search-results').innerHTML = '';
-                return;
-            }
-            searchTimeout = setTimeout(async () => {
-                try {
-                    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
-                    const data = await res.json();
-                    let html = '';
-                    if (data.profiles.length > 0) {
-                        html += '<div class="search-section-header">Profile / Feeds</div>';
-                        html += data.profiles.map(p => `
-                            <div class="search-profile" onclick="goToProfile('${encodeURIComponent(p.feed_link)}')">
-                                ${p.profile_image ? `<img src="${p.profile_image}" onerror="this.style.display='none'">` : '<div style="width:40px;height:40px;border-radius:5px;background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;margin-right:10px;flex-shrink:0">${(p.creator||'?').charAt(0).toUpperCase()}</div>'}
-                                <div>
-                                    <div class="sp-name">${p.creator || p.feed_title}</div>
-                                    <div class="sp-handle">${p.feed_title}</div>
-                                </div>
-                                <span class="sp-count">${p.tweet_count} Tweets${p.is_subscribed ? ' &#10003;' : ''}</span>
-                            </div>
-                        `).join('');
-                    }
-                    if (data.tweets.length > 0) {
-                        html += '<div class="search-section-header">Tweets</div>';
-                        html += data.tweets.slice(0, 10).map(t => `
-                            <div class="search-tweet" onclick="goToProfile('${encodeURIComponent(t.feed_link)}')">
-                                <span class="st-creator">${t.creator}</span>
-                                <span style="color:#8899A6;font-size:12px;margin-left:8px">${t.date ? new Date(t.date).toLocaleDateString('de-DE') : ''}</span>
-                                <div class="st-text">${(t.description || t.title || '').replace(/<[^>]*>/g, '').substring(0, 120)}</div>
-                            </div>
-                        `).join('');
-                    }
-                    if (!data.profiles.length && !data.tweets.length) {
-                        html = '<div style="padding:20px;text-align:center;color:#8899A6">Keine Ergebnisse</div>';
-                    }
-                    document.getElementById('search-results').innerHTML = html;
-                } catch (e) {
-                    document.getElementById('search-results').innerHTML = '<div style="padding:20px;color:#cc0000">Suche fehlgeschlagen</div>';
-                }
-            }, 300);
-        }
+function toggleSearch(){
+    searchOpen=!searchOpen;
+    document.getElementById('search-bar').classList.toggle('open',searchOpen);
+    document.getElementById('main').classList.toggle('search-open',searchOpen);
+    if(searchOpen){
+        document.getElementById('search-input').focus();
+    } else {
+        document.getElementById('search-input').value='';
+        document.getElementById('search-results').innerHTML='';
+        document.getElementById('search-results').classList.remove('open');
+    }
+}
 
-        function goToProfile(feedUrl) {
-            window.location.href = `/profile?feed=${feedUrl}`;
-        }
-
-        function toggleSidebar() {
-            sidebarOpen = !sidebarOpen;
-            document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
-            document.getElementById('sidebar-overlay').classList.toggle('open', sidebarOpen);
-            document.getElementById('feeds-btn').classList.toggle('active', sidebarOpen);
-            if (sidebarOpen) loadFeeds();
-        }
-
-        document.getElementById('sidebar-overlay').addEventListener('click', () => {
-            if (sidebarOpen) toggleSidebar();
-        });
-
-        function openLightbox(tweetId, imgIndex) {
-            const gallery = document.querySelector(`[data-gallery="${tweetId}"]`);
-            if (!gallery) return;
-            lightboxImages = Array.from(gallery.querySelectorAll('.gi img')).map(img => img.src);
-            lightboxIndex = imgIndex;
-            showLightboxImage();
-            document.getElementById('lightbox').classList.add('open');
-            document.addEventListener('keydown', lightboxKeyHandler);
-        }
-
-        function closeLightbox() {
-            document.getElementById('lightbox').classList.remove('open');
-            document.removeEventListener('keydown', lightboxKeyHandler);
-        }
-
-        function lightboxNav(dir) {
-            lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
-            showLightboxImage();
-        }
-
-        function showLightboxImage() {
-            document.getElementById('lightbox-img').src = lightboxImages[lightboxIndex];
-            document.getElementById('lightbox-counter').textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
-        }
-
-        function lightboxKeyHandler(e) {
-            if (e.key === 'Escape') closeLightbox();
-            else if (e.key === 'ArrowLeft') lightboxNav(-1);
-            else if (e.key === 'ArrowRight') lightboxNav(1);
-        }
-
-        function showToast(msg, type) {
-            const el = document.getElementById('toast');
-            el.textContent = msg;
-            el.className = 'show ' + type;
-            setTimeout(() => el.className = '', 5000);
-        }
-
-        async function loadFeeds() {
-            try {
-                const res = await fetch('/api/feeds');
-                const feeds = await res.json();
-                const container = document.getElementById('feed-list');
-                if (!feeds.length) {
-                    container.innerHTML = '<div style="padding:20px;color:#8899A6;text-align:center;font-size:13px">Keine Feeds abonniert.<br>Füge einen hinzu.</div>';
-                    return;
-                }
-                container.innerHTML = feeds.map(url => {
-                    const parts = url.split('/').filter(Boolean);
-                    const name = parts[parts.length - 1] === 'rss' ? parts[parts.length - 2] : parts[parts.length - 1];
-                    return `
-                        <div class="feed-item">
-                            <div style="cursor:pointer" onclick="goToProfile('${encodeURIComponent(url)}')">
-                                <span class="feed-name">@${name}</span>
-                                <span class="feed-url">${url}</span>
-                            </div>
-                            <button class="feed-delete" onclick="removeFeed('${encodeURIComponent(url)}')" title="Feed entfernen">&times;</button>
-                        </div>
-                    `;
-                }).join('');
-            } catch (e) {
-                document.getElementById('feed-list').innerHTML = '<div style="padding:20px;color:#cc0000">Fehler beim Laden</div>';
-            }
-        }
-
-        async function addFeed() {
-            const input = document.getElementById('feed-url');
-            let url = input.value.trim();
-            if (!url) return;
-            try {
-                const res = await fetch('/api/feeds', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url})
+function doSearch(q){
+    clearTimeout(searchTO);
+    var sr=document.getElementById('search-results');
+    if(!q.trim()){sr.innerHTML='';sr.classList.remove('open');return;}
+    searchTO=setTimeout(function(){
+        fetch('/api/search?q='+encodeURIComponent(q.trim())).then(function(r){return r.json();}).then(function(data){
+            var h='';
+            if(data.profiles&&data.profiles.length){
+                h+='<div class="sr-header">Profile / Feeds</div>';
+                data.profiles.forEach(function(p){
+                    var imgHtml=p.profile_image?'<img src="'+p.profile_image+'" onerror="this.style.display=\'none\'">':'<div style="width:40px;height:40px;border-radius:5px;background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;flex-shrink:0">'+(p.creator||'?').charAt(0).toUpperCase()+'</div>';
+                    h+='<div class="sr-profile" onclick="goProfile(\''+esc(p.feed_link)+'\')">'+imgHtml+'<div><div class="sr-name">'+esc(p.creator||p.feed_title)+'</div><div class="sr-handle">'+esc(p.feed_title)+'</div></div><span class="sr-count">'+p.tweet_count+' Tweets'+(p.is_subscribed?' &#10003;':'')+'</span></div>';
                 });
-                if (!res.ok) throw new Error('Server error');
-                input.value = '';
-                showToast('Feed hinzugefügt! Aktualisiere...', 'success');
-                await loadFeeds();
-                await refreshTimeline(false);
-            } catch (e) {
-                showToast('Fehler: ' + e.message, 'error');
             }
-        }
-
-        async function removeFeed(url) {
-            if (!confirm('Feed und alle zugehörigen Tweets/Bilder entfernen?')) return;
-            try {
-                const res = await fetch('/api/feeds', {
-                    method: 'DELETE',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url: decodeURIComponent(url)})
+            if(data.tweets&&data.tweets.length){
+                h+='<div class="sr-header">Tweets</div>';
+                data.tweets.slice(0,10).forEach(function(t){
+                    var txt=(t.description||t.title||'').replace(/<[^>]*>/g,'').substring(0,120);
+                    h+='<div class="sr-tweet" onclick="goProfile(\''+esc(t.feed_link)+'\')"><span class="sr-t-creator">'+esc(t.creator)+'</span><span style="color:#8899A6;font-size:12px;margin-left:8px">'+(t.date?new Date(t.date).toLocaleDateString('de-DE'):'')+'</span><div class="sr-t-text">'+esc(txt)+'</div></div>';
                 });
-                const data = await res.json();
-                showToast(`Feed entfernt! (${data.deleted_images || 0} Bilder gelöscht, ${data.remaining_tweets || 0} Tweets übrig)`, 'success');
-                await loadFeeds();
-                currentPage = 1;
-                await loadTimeline();
-            } catch (e) {
-                showToast('Fehler: ' + e.message, 'error');
             }
-        }
+            if(!h) h='<div style="padding:20px;text-align:center;color:#8899A6">Keine Ergebnisse</div>';
+            sr.innerHTML=h;
+            sr.classList.add('open');
+        }).catch(function(){sr.innerHTML='<div style="padding:20px;color:#cc0000">Suche fehlgeschlagen</div>';sr.classList.add('open');});
+    },300);
+}
 
-        async function refreshTimeline(force = false) {
-            const btn = document.getElementById('refresh-btn');
-            const hardBtn = document.getElementById('hard-refresh-btn');
-            btn.disabled = true;
-            hardBtn.disabled = true;
-            btn.innerHTML = '<span class="spinning">&#8635;</span> Lade...';
-            try {
-                const res = await fetch(`/api/refresh${force ? '?force=1' : ''}`, {method: 'POST'});
-                const data = await res.json();
-                const msg = data.new_tweets > 0
-                    ? `${data.new_tweets} neue Tweets! (${data.total} gesamt)`
-                    : `Keine neuen Tweets (${data.total} gesamt)`;
-                showToast(msg, 'success');
-                if (data.errors && data.errors.length > 0) {
-                    const errMsg = data.errors.map(e => e.error).join(', ');
-                    setTimeout(() => showToast('Feed-Fehler: ' + errMsg, 'error'), 600);
-                }
-                document.getElementById('last-refresh').textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
-                currentPage = 1;
-                await loadTimeline();
-            } catch (e) {
-                showToast('Fehler beim Aktualisieren: ' + e.message, 'error');
-            } finally {
-                btn.disabled = false;
-                hardBtn.disabled = false;
-                btn.innerHTML = '&#8635; Aktualisieren';
-            }
-        }
+function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-        async function loadTimeline(append = false) {
-            if (loading) return;
-            loading = true;
-            const container = document.getElementById('timeline');
-            if (!append) {
-                container.innerHTML = '<div class="loading">Lade Timeline...</div>';
-                currentPage = 1;
-            }
-            try {
-                const res = await fetch(`/api/timeline?page=${currentPage}&per_page=20`);
-                if (!res.ok) throw new Error('Server error');
-                const data = await res.json();
-                const items = data.items || [];
-                hasMore = data.has_more;
-                document.getElementById('tweet-count').textContent = `${data.total} Tweets geladen`;
-                if (!items.length && !append) {
-                    container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Klicke "Aktualisieren" um Tweets zu laden.</div>';
-                    loading = false;
-                    return;
-                }
-                const html = items.map(item => renderTweet(item)).join('');
-                if (!append) {
-                    container.innerHTML = html;
-                } else {
-                    container.insertAdjacentHTML('beforeend', html);
-                }
-            } catch (e) {
-                if (!append) {
-                    container.innerHTML = '<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>' + e.message + '</div>';
-                }
-            } finally {
-                loading = false;
-            }
-        }
+function goProfile(url){location.href='/profile?feed='+url;}
 
-        function extractImages(description) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = description;
-            const imgs = [];
-            tmp.querySelectorAll('img').forEach(img => {
-                const src = img.getAttribute('src');
-                if (src) imgs.push(src);
-            });
-            const videoThumbs = [];
-            tmp.querySelectorAll('a').forEach(a => {
-                const text = a.textContent.trim().toLowerCase();
-                const img = a.querySelector('img');
-                if ((text.includes('video') || text.includes('gif')) && img) {
-                    videoThumbs.push({src: img.getAttribute('src'), link: a.getAttribute('href'), isVideo: true});
-                }
-            });
-            return {imgs, videoThumbs};
-        }
+function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;setTimeout(function(){el.className='';},5000);}
 
-        function renderTweet(item) {
-            const creator = item.creator || 'Unbekannt';
-            const username = creator.replace('@', '');
-            const profileSrc = item.profile_image || '';
-            const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
-            const isRt = item.is_retweet;
-            const rtCreator = item.rt_creator || '';
-            const tweetId = item.link || Math.random().toString(36).substr(2, 9);
+async function loadFeeds(){
+    try{
+        var feeds=await(await fetch('/api/feeds')).json();
+        var c=document.getElementById('feed-list');
+        if(!feeds.length){c.innerHTML='<div style="padding:20px;color:#8899A6;text-align:center;font-size:13px">Keine Feeds abonniert.</div>';return;}
+        c.innerHTML=feeds.map(function(url){
+            var parts=url.split('/').filter(Boolean);
+            var name=parts[parts.length-1]==='rss'?parts[parts.length-2]:parts[parts.length-1];
+            return '<div class="feed-item"><div style="cursor:pointer" onclick="goProfile(\''+encodeURIComponent(url)+'\')"><span class="feed-name">@'+esc(name)+'</span><span class="feed-url">'+esc(url)+'</span></div><button class="feed-delete" onclick="removeFeed(\''+encodeURIComponent(url)+'\')" title="Entfernen">&times;</button></div>';
+        }).join('');
+    }catch(e){document.getElementById('feed-list').innerHTML='<div style="padding:20px;color:#cc0000">Fehler</div>';}
+}
 
-            let avatarHtml;
-            if (profileSrc) {
-                avatarHtml = `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.outerHTML='<div class=\\'tweet-avatar\\' style=\\'background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px\\'>${username.charAt(0).toUpperCase()}</div>'">`;
-            } else {
-                avatarHtml = `<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
-            }
+async function addFeed(){
+    var input=document.getElementById('feed-url');
+    var url=input.value.trim();
+    if(!url)return;
+    try{
+        await fetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
+        input.value='';
+        showToast('Feed hinzugefugt!','success');
+        await loadFeeds();
+        await refreshTimeline(false);
+    }catch(e){showToast('Fehler: '+e.message,'error');}
+}
 
-            const desc = item.description || item.title || '';
-            const {imgs, videoThumbs} = extractImages(desc);
+async function removeFeed(url){
+    if(!confirm('Feed und alle Tweets/Bilder entfernen?'))return;
+    try{
+        var data=await(await fetch('/api/feeds',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:decodeURIComponent(url)})})).json();
+        showToast('Feed entfernt! ('+(data.deleted_images||0)+' Bilder)','success');
+        await loadFeeds();
+        currentPage=1;
+        await loadTimeline();
+    }catch(e){showToast('Fehler: '+e.message,'error');}
+}
 
-            let textOnly = desc;
-            const tmpDiv = document.createElement('div');
-            tmpDiv.innerHTML = desc;
-            tmpDiv.querySelectorAll('img').forEach(img => img.remove());
-            textOnly = tmpDiv.innerHTML;
+async function refreshTimeline(force){
+    var btn=document.querySelector('[onclick="refreshTimeline(false)"]');
+    var hbtn=document.querySelector('[onclick="refreshTimeline(true)"]');
+    btn.disabled=true;hbtn.disabled=true;btn.innerHTML='<span class="spinning">&#8635;</span> Lade...';
+    try{
+        var data=await(await fetch('/api/refresh'+(force?'?force=1':''),{method:'POST'})).json();
+        showToast(data.new_tweets>0?data.new_tweets+' neue Tweets! ('+data.total+' gesamt)':'Keine neuen Tweets ('+data.total+' gesamt)','success');
+        if(data.errors&&data.errors.length) setTimeout(function(){showToast('Feed-Fehler: '+data.errors.map(function(e){return e.error;}).join(', '),'error');},600);
+        document.getElementById('last-refresh').textContent='Aktualisiert: '+new Date().toLocaleTimeString('de-DE');
+        currentPage=1;
+        await loadTimeline();
+    }catch(e){showToast('Fehler: '+e.message,'error');}
+    finally{btn.disabled=false;hbtn.disabled=false;btn.innerHTML='&#8635; Aktualisieren';}
+}
 
-            let galleryHtml = '';
-            const allImages = [...imgs, ...videoThumbs.map(v => v.src)];
-            if (allImages.length > 0) {
-                const count = allImages.length;
-                const gridClass = count <= 4 ? `g${count}` : count <= 9 ? `g${count}` : 'g9';
-                const maxShow = 9;
-                const showImages = allImages.slice(0, maxShow);
-                const hasMore = count > maxShow;
-                const videoSrcSet = new Set(videoThumbs.map(v => v.src));
+async function loadTimeline(append){
+    if(loading)return;
+    loading=true;
+    var c=document.getElementById('timeline');
+    if(!append){c.innerHTML='<div class="loading">Lade Timeline...</div>';currentPage=1;}
+    try{
+        var data=await(await fetch('/api/timeline?page='+currentPage+'&per_page=20')).json();
+        var items=data.items||[];
+        hasMore=data.has_more;
+        document.getElementById('tweet-count').textContent=data.total+' Tweets';
+        if(!items.length&&!append){c.innerHTML='<div class="empty-state"><h3>Keine Tweets</h3>Klicke "Aktualisieren".</div>';loading=false;return;}
+        var html=items.map(renderTweet).join('');
+        if(!append) c.innerHTML=html;
+        else c.insertAdjacentHTML('beforeend',html);
+    }catch(e){if(!append) c.innerHTML='<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>'+e.message+'</div>';}
+    finally{loading=false;}
+}
 
-                const itemsHtml = showImages.map((src, i) => {
-                    const isVideo = videoSrcSet.has(src);
-                    const isLast = i === maxShow - 1 && hasMore;
-                    const moreText = isLast ? `+${count - maxShow + 1}` : '';
-                    const cls = `gi${isVideo ? ' video-thumb' : ''}${isLast ? ' more-overlay' : ''}`;
-                    return `<div class="${cls}" data-more="${moreText}" onclick="openLightbox('${tweetId}', ${i})"><img src="${src}" alt="" loading="lazy"></div>`;
-                }).join('');
+function extractImgs(desc){
+    var tmp=document.createElement('div');tmp.innerHTML=desc;
+    var imgs=[];tmp.querySelectorAll('img').forEach(function(img){var s=img.getAttribute('src');if(s)imgs.push(s);});
+    var vids=[];tmp.querySelectorAll('a').forEach(function(a){var t=a.textContent.trim().toLowerCase();var img=a.querySelector('img');if((t.includes('video')||t.includes('gif'))&&img)vids.push({src:img.getAttribute('src'),isVideo:true});});
+    return {imgs:imgs,vids:vids};
+}
 
-                galleryHtml = `<div class="img-gallery ${gridClass}" data-gallery="${tweetId}">${itemsHtml}</div>`;
-            }
+function renderTweet(item){
+    var creator=item.creator||'Unbekannt';
+    var username=creator.replace('@','');
+    var date=item.date?new Date(item.date).toLocaleString('de-DE'):'';
+    var isRt=item.is_retweet;
+    var rtCreator=item.rt_creator||'';
+    var tid=item.link||Math.random().toString(36).substr(2,9);
+    var desc=item.description||item.title||'';
+    var ei=extractImgs(desc);
+    var tmpD=document.createElement('div');tmpD.innerHTML=desc;tmpD.querySelectorAll('img').forEach(function(img){img.remove();});
+    var textOnly=tmpD.innerHTML;
+    var pSrc=item.profile_image||'';
+    var avatarHtml=pSrc?'<img class="tweet-avatar" src="'+pSrc+'" alt="'+esc(username)+'" onerror="this.outerHTML=\'<div class=\\'tweet-avatar\\' style=\\'background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px\\'>'+esc(username.charAt(0).toUpperCase())+'</div>\'">':'<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">'+esc(username.charAt(0).toUpperCase())+'</div>';
+    var allImgs=ei.imgs.concat(ei.vids.map(function(v){return v.src;}));
+    var galleryHtml='';
+    if(allImgs.length>0){
+        var cnt=allImgs.length;
+        var gc=cnt<=9?'g'+cnt:'g9';
+        var maxS=9,show=allImgs.slice(0,maxS),hasMore=cnt>maxS;
+        var vidSet=new Set(ei.vids.map(function(v){return v.src;}));
+        var itemsHtml=show.map(function(src,i){
+            var isV=vidSet.has(src);
+            var isLast=i===maxS-1&&hasMore;
+            var more=isLast?'+'+(cnt-maxS+1):'';
+            var cls='gi'+(isV?' video-thumb':'')+(isLast?' more-overlay':'');
+            return '<div class="'+cls+'" data-more="'+more+'" onclick="openLB(\''+esc(tid)+'\','+i+')"><img src="'+src+'" alt="" loading="lazy"></div>';
+        }).join('');
+        galleryHtml='<div class="img-gallery '+gc+'" data-gallery="'+esc(tid)+'">'+itemsHtml+'</div>';
+    }
+    return '<div class="tweet" style="overflow:auto;">'+(isRt?'<div class="retweet-indicator">&#8634; Retweet von '+esc(rtCreator)+'</div>':'')+'<div class="tweet-header">'+avatarHtml+'<span class="tweet-user" onclick="goProfile(\''+esc(item.feed_link||'')+'\')">'+esc(username)+'</span><span class="tweet-username">'+esc(creator)+'</span><span class="tweet-time">'+date+'</span></div><div class="tweet-body">'+textOnly+'</div>'+(galleryHtml?'<div class="tweet-body">'+galleryHtml+'</div>':'')+'<div class="tweet-actions"><a href="'+item.link+'" target="_blank">&#128279; Nitter</a></div></div>';
+}
 
-            return `
-                <div class="tweet" style="overflow:auto;">
-                    ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von ${rtCreator}</div>` : ''}
-                    <div class="tweet-header">
-                        ${avatarHtml}
-                        <span class="tweet-user" style="cursor:pointer" onclick="goToProfile('${encodeURIComponent(item.feed_link || '')}')">${username}</span>
-                        <span class="tweet-username">${creator}</span>
-                        <span class="tweet-time">${date}</span>
-                    </div>
-                    <div class="tweet-body">${textOnly}</div>
-                    ${galleryHtml ? `<div class="tweet-body">${galleryHtml}</div>` : ''}
-                    <div class="tweet-actions">
-                        <a href="${item.link}" target="_blank">&#128279; Auf Nitter ansehen</a>
-                    </div>
-                </div>
-            `;
-        }
+function openLB(tid,idx){
+    var g=document.querySelector('[data-gallery="'+tid+'"]');
+    if(!g)return;
+    lbImgs=Array.from(g.querySelectorAll('.gi img')).map(function(img){return img.src;});
+    lbIdx=idx;showLB();
+    document.getElementById('lightbox').classList.add('open');
+    document.addEventListener('keydown',lbKey);
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.removeEventListener('keydown',lbKey);}
+function lbNav(d){lbIdx=(lbIdx+d+lbImgs.length)%lbImgs.length;showLB();}
+function showLB(){document.getElementById('lb-img').src=lbImgs[lbIdx];document.getElementById('lb-counter').textContent=(lbIdx+1)+' / '+lbImgs.length;}
+function lbKey(e){if(e.key==='Escape')closeLightbox();else if(e.key==='ArrowLeft')lbNav(-1);else if(e.key==='ArrowRight')lbNav(1);}
 
-        function loadMore() {
-            if (!hasMore || loading) return;
-            currentPage++;
-            loadTimeline(true);
-        }
+window.addEventListener('scroll',function(){if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300&&!hasMore||loading)return;if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){currentPage++;loadTimeline(true);}});
 
-        window.addEventListener('scroll', () => {
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300) {
-                loadMore();
-            }
-        });
-
-        document.getElementById('feed-url').addEventListener('keypress', e => {
-            if (e.key === 'Enter') addFeed();
-        });
-
-        loadTimeline();
-        fetch('/api/timeline').then(r => r.json()).then(data => {
-            if (data.total === 0) refreshTimeline(false);
-        });
-    </script>
+loadTimeline();
+fetch('/api/timeline').then(function(r){return r.json();}).then(function(d){if(d.total===0)refreshTimeline(false);});
+</script>
 </body>
 </html>
