@@ -3,9 +3,17 @@ import os
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
+import requests
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
+
+REQUEST_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+}
 
 
 def load_feeds():
@@ -31,15 +39,16 @@ def parse_date(date_str):
 
 def fetch_feed_items(url):
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-        }
-        feed = feedparser.parse(url, timeout=15, headers=headers)
-        items = []
-        if feed.bozo and not feed.entries:
+        resp = requests.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+        resp.raise_for_status()
+        content_type = resp.headers.get('Content-Type', '')
+        raw_content = resp.text
+
+        if '<html' in raw_content[:500].lower():
             return []
+
+        feed = feedparser.parse(raw_content)
+        items = []
         for entry in feed.entries:
             date_str = entry.get('published', '')
             timestamp = parse_date(date_str).timestamp()
@@ -66,6 +75,27 @@ def fetch_feed_items(url):
         return items
     except Exception as e:
         return []
+
+
+def extract_nitter_urls(html_text):
+    import re
+    pattern = r'https?://[^\s"\'<>]+'
+    urls = re.findall(pattern, html_text)
+    return [u for u in urls if 'nitter' in u.lower() or 'twitter' in u.lower()]
+
+
+def fetch_nitter_html(username, base_url):
+    try:
+        profile_url = base_url.rstrip('/') + '/' + username
+        resp = requests.get(profile_url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }, timeout=15, allow_redirects=True)
+        resp.raise_for_status()
+        return resp.text
+    except Exception:
+        return None
 
 
 @app.route('/')
@@ -125,18 +155,21 @@ def get_timeline():
 def test_feed():
     url = request.args.get('url', 'https://nitter.privacyredirect.com/BeckyLynchWWE/rss')
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-        }
-        feed = feedparser.parse(url, timeout=15, headers=headers)
+        resp = requests.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+        content_type = resp.headers.get('Content-Type', '')
+        raw = resp.text[:1000]
+        is_html = '<html' in raw.lower()
+        feed = feedparser.parse(resp.text)
         return jsonify({
             'url': url,
+            'status_code': resp.status_code,
+            'content_type': content_type,
+            'is_html': is_html,
             'entries_count': len(feed.entries),
             'feed_title': feed.feed.get('title', 'N/A'),
             'bozo': feed.bozo,
             'bozo_exception': str(feed.bozo_exception) if feed.bozo else None,
-            'first_entry': feed.entries[0].get('title', 'N/A') if feed.entries else 'None',
+            'raw_snippet': raw[:500],
         })
     except Exception as e:
         return jsonify({'url': url, 'error': str(e)})
