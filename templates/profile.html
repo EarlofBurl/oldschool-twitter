@@ -34,16 +34,16 @@
         }
         .profile-banner { height: 120px; background: #5595BF; position: relative; }
         .profile-info {
-            padding: 0 20px 15px; border-bottom: 1px solid #E1E8ED;
-            position: relative;
+            padding: 15px 20px; border-bottom: 1px solid #E1E8ED;
+            display: flex; align-items: flex-start; gap: 15px;
         }
         .profile-avatar {
-            width: 80px; height: 80px; border-radius: 8px; border: 4px solid white;
-            position: absolute; top: -50px; left: 20px; background: #E1E8ED;
-            object-fit: cover;
+            width: 80px; height: 80px; border-radius: 8px; border: 4px solid #5595BF;
+            background: #E1E8ED; flex-shrink: 0; object-fit: cover;
         }
+        .profile-details { flex: 1; min-width: 0; }
         .profile-name {
-            margin-top: 48px; font-size: 20px; font-weight: bold; color: #333;
+            font-size: 20px; font-weight: bold; color: #333;
         }
         .profile-handle { color: #8899A6; font-size: 14px; margin-top: 2px; }
         .profile-source { color: #8899A6; font-size: 12px; margin-top: 6px; word-break: break-all; }
@@ -53,18 +53,6 @@
         }
         .profile-stats span { color: #8899A6; }
         .profile-stats b { color: #333; }
-        .profile-actions { margin-top: 10px; display: flex; gap: 8px; }
-        .btn-subscribe {
-            background-color: #5595BF; color: white; border: 1px solid #3B7BA8;
-            padding: 6px 16px; border-radius: 3px; font-size: 13px; cursor: pointer;
-        }
-        .btn-subscribe:hover { background-color: #3B7BA8; }
-        .btn-subscribe.subscribed { background: white; color: #5595BF; }
-        .btn-back {
-            background: white; color: #5595BF; border: 1px solid #5595BF;
-            padding: 6px 16px; border-radius: 3px; font-size: 13px; cursor: pointer;
-        }
-        .btn-back:hover { background: #F5F8FA; }
 
         .timeline { background-color: white; }
         .tweet { border-bottom: 1px solid #E1E8ED; padding: 12px 20px; }
@@ -200,29 +188,14 @@
                 headerEl.innerHTML='<div class="profile-banner"></div>'
                     +'<div class="profile-info">'
                     +avatarHtml
+                    +'<div class="profile-details">'
                     +'<div class="profile-name">'+esc(data.feed_title||data.creator||'Unbekannt')+'</div>'
                     +'<div class="profile-handle">'+esc(data.creator||'')+'</div>'
                     +'<div class="profile-source"><a href="'+esc(data.feed_url)+'" target="_blank">'+esc(data.feed_url)+'</a></div>'
                     +'<div class="profile-stats"><span><b>'+data.total+'</b> Tweets</span></div>'
-                    +'<div class="profile-actions"><button class="btn-subscribe '+(data.is_subscribed?'subscribed':'')+'" onclick="toggleSubscribe()">'+(data.is_subscribed?'Abonniert':'Abonnieren')+'</button></div>'
+                    +'</div>'
                     +'</div>';
             }catch(e){showToast('Profil laden fehlgeschlagen','error');}
-        }
-
-        async function toggleSubscribe(){
-            var feeds=await(await fetch('/api/feeds')).json();
-            var isSub=feeds.includes(feedUrl);
-            try{
-                if(isSub){
-                    if(!confirm('Feed entfernen und alle Tweets/Bilder löschen?'))return;
-                    await fetch('/api/feeds',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:feedUrl})});
-                    showToast('Feed entfernt','success');
-                }else{
-                    await fetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:feedUrl})});
-                    showToast('Feed abonniert!','success');
-                }
-                await loadProfile();
-            }catch(e){showToast('Fehler: '+e.message,'error');}
         }
 
         async function loadTimeline(append){
