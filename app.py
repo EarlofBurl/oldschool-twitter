@@ -5,10 +5,10 @@ import hashlib
 import time
 import logging
 from datetime import datetime
+from urllib.parse import quote, urlparse, urljoin
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import feedparser
 import requests
-from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
@@ -41,101 +41,143 @@ REQUEST_HEADERS = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-cache',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
 }
 
 
+def load_json(path, default):
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return default
+
+
+def save_json(path, data):
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
 def load_feeds():
-    with open(FEEDS_FILE, 'r') as f:
-        return json.load(f)
+    return load_json(FEEDS_FILE, [])
 
 
 def save_feeds(feeds):
-    with open(FEEDS_FILE, 'w') as f:
-        json.dump(feeds, f, indent=2)
+    save_json(FEEDS_FILE, feeds)
 
 
 def load_tweets():
-    with open(TWEETS_FILE, 'r') as f:
-        return json.load(f)
+    return load_json(TWEETS_FILE, {})
 
 
 def save_tweets(tweets):
-    with open(TWEETS_FILE, 'w') as f:
-        json.dump(tweets, f, indent=2, ensure_ascii=False)
+    save_json(TWEETS_FILE, tweets)
 
 
 def load_cache_meta():
-    with open(CACHE_FILE, 'r') as f:
-        return json.load(f)
+    return load_json(CACHE_FILE, {})
 
 
 def save_cache_meta(meta):
-    with open(CACHE_FILE, 'w') as f:
-        json.dump(meta, f, indent=2)
+    save_json(CACHE_FILE, meta)
 
 
-def get_domain(url):
-    parsed = urlparse(url)
-    return f"{parsed.scheme}://{parsed.netloc}"
+def solve_anubis(html_content, base_url, original_path, session):
+    logger.info(f"Solving Anubis challenge for {base_url}{original_path}")
 
-
-def solve_anubis(html_content, base_url, session):
     preact_match = re.search(
         r'<script\s+id="preact_info"\s+type="application/json">(.*?)</script>',
         html_content, re.DOTALL
     )
-    if not preact_match:
-        challenge_match = re.search(
-            r'<script\s+id="anubis_challenge"\s+type="application/json">(.*?)</script>',
-            html_content, re.DOTALL
-        )
-        if challenge_match:
-            data = json.loads(challenge_match.group(1))
-            challenge = data.get('challenge', {}).get('randomData', '')
-            difficulty = data.get('challenge', {}).get('difficulty', data.get('rules', {}).get('difficulty', 4))
-            redir = '/'
-        else:
-            logger.warning("No Anubis challenge found")
+    anubis_match = re.search(
+        r'<script\s+id="anubis_challenge"\s+type="application/json">(.*?)</script>',
+        html_content, re.DOTALL
+    )
+
+    challenge_str = ''
+    difficulty = 4
+    pass_path = None
+    challenge_id = None
+
+    if preact_match:
+        try:
+            data = json.loads(preact_match.group(1))
+            challenge_str = data.get('challenge', '')
+            difficulty = data.get('difficulty', 4)
+            pass_path = data.get('redir', '/')
+            logger.info(f"Preact method: challenge={challenge_str[:20]}..., difficulty={difficulty}")
+        except json.JSONDecodeError:
+            logger.error("Failed to parse preact_info JSON")
+            return None
+
+    elif anubis_match:
+        try:
+            data = json.loads(anubis_match.group(1))
+            challenge_data = data.get('challenge', {})
+            challenge_str = challenge_data.get('randomData', '')
+            difficulty = data.get('rules', {}).get('difficulty', challenge_data.get('difficulty', 4))
+            challenge_id = challenge_data.get('id', '')
+            logger.info(f"Fast method: id={challenge_id}, difficulty={difficulty}")
+        except json.JSONDecodeError:
+            logger.error("Failed to parse anubis_challenge JSON")
             return None
     else:
-        preact_data = json.loads(preact_match.group(1))
-        challenge = preact_data.get('challenge', '')
-        difficulty = preact_data.get('difficulty', 4)
-        redir = preact_data.get('redir', '/')
+        logger.warning("No Anubis challenge found in page")
+        logger.debug(f"Page snippet: {html_content[:500]}")
+        return None
 
-    logger.info(f"Solving Anubis challenge (difficulty={difficulty}) for {base_url}")
+    if not challenge_str:
+        logger.error("No challenge string found")
+        return None
 
-    result = hashlib.sha256(challenge.encode('utf-8')).hexdigest()
+    result = hashlib.sha256(challenge_str.encode('utf-8')).hexdigest()
+    logger.info(f"SHA256 result: {result[:20]}...")
 
     wait_time = difficulty * 0.125 + 0.5
-    logger.info(f"Waiting {wait_time:.1f}s")
+    logger.info(f"Waiting {wait_time:.1f}s (difficulty={difficulty})")
     time.sleep(wait_time)
 
-    if '?' in redir:
-        pass_url = f"{redir}&result={result}"
+    if pass_path:
+        if '?' in pass_path:
+            pass_url = f"{pass_path}&result={result}"
+        else:
+            pass_url = f"{pass_path}?result={result}"
+    elif challenge_id:
+        encoded_path = quote(original_path, safe='')
+        pass_url = f"/.within.website/x/cmd/anubis/api/pass-challenge?id={challenge_id}&redir={encoded_path}&result={result}"
     else:
-        pass_url = f"{redir}?result={result}"
+        logger.error("No pass path or challenge ID available")
+        return None
 
     if not pass_url.startswith('http'):
         pass_url = urljoin(base_url, pass_url)
 
-    logger.info(f"Passing challenge: {pass_url}")
+    logger.info(f"Pass URL: {pass_url[:100]}...")
 
     try:
         resp = session.get(pass_url, headers=REQUEST_HEADERS, timeout=30, allow_redirects=True)
-        logger.info(f"Challenge response: status={resp.status_code}, content-type={resp.headers.get('Content-Type', '')}")
+        logger.info(f"Challenge response: status={resp.status_code}, content-type={resp.headers.get('Content-Type', '')}, len={len(resp.text)}")
         if '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower()):
-            logger.warning("Challenge not solved")
+            logger.warning("Challenge not solved - still on challenge page")
+            logger.debug(f"Response snippet: {resp.text[:500]}")
             return None
         logger.info("Anubis challenge solved!")
         return resp
     except Exception as e:
-        logger.error(f"Anubis challenge failed: {e}")
+        logger.error(f"Failed to pass challenge: {e}")
         return None
 
 
 def fetch_with_anubis(url):
-    domain = get_domain(url)
+    domain = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+    original_path = urlparse(url).path
+    if urlparse(url).query:
+        original_path += '?' + urlparse(url).query
+
     session = requests.Session()
 
     cached_cookies = COOKIE_CACHE.get(domain)
@@ -143,161 +185,143 @@ def fetch_with_anubis(url):
         logger.info(f"Using cached cookies for {domain}")
         for name, value in cached_cookies['cookies'].items():
             session.cookies.set(name, value, domain=urlparse(domain).netloc)
+    else:
+        COOKIE_CACHE.pop(domain, None)
 
     resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+    logger.info(f"Initial fetch: status={resp.status_code}, content-type={resp.headers.get('Content-Type', '')}, len={len(resp.text)}")
 
-    is_challenge = '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower())
+    is_challenge = '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower() or 'making sure you' in resp.text.lower())
 
     if is_challenge:
         logger.info(f"Anubis challenge detected for {url}")
-        challenge_resp = solve_anubis(resp.text, domain, session)
+        challenge_resp = solve_anubis(resp.text, domain, original_path, session)
         if challenge_resp is not None:
             COOKIE_CACHE[domain] = {
                 'cookies': {c.name: c.value for c in session.cookies},
                 'expires': time.time() + 3600
             }
-            if challenge_resp.headers.get('Content-Type', '').startswith('application/rss') or '<rss' in challenge_resp.text[:100]:
+            if resp.headers.get('Content-Type', '').startswith('application/rss') or '<rss' in resp.text[:200]:
+                return resp, session
+
+            if challenge_resp.headers.get('Content-Type', '').startswith('application/rss') or '<rss' in challenge_resp.text[:200]:
+                logger.info("Got RSS content directly from challenge redirect")
                 return challenge_resp, session
+
+            logger.info("Challenge solved, re-fetching original URL")
             resp = session.get(url, headers=REQUEST_HEADERS, timeout=15, allow_redirects=True)
+            if '<html' in resp.text[:500].lower() and ('anubis' in resp.text.lower() or 'not a bot' in resp.text.lower()):
+                logger.error("Still getting challenge page after solving - IP may be rate-limited")
+                return None, session
         else:
             logger.warning(f"Failed to solve Anubis challenge for {url}")
+            return None, session
 
     return resp, session
-
-
-def download_image(url):
-    if not url:
-        return None
-    url_hash = hashlib.md5(url.encode()).hexdigest()
-    ext = '.jpg'
-    if '.png' in url.lower():
-        ext = '.png'
-    elif '.gif' in url.lower():
-        ext = '.gif'
-    elif '.webp' in url.lower():
-        ext = '.webp'
-    filename = f"{url_hash}{ext}"
-    filepath = os.path.join(IMAGES_DIR, filename)
-    if os.path.exists(filepath):
-        return f"/images/{filename}"
-    try:
-        resp, session = fetch_with_anubis(url)
-        if resp.status_code == 200 and len(resp.content) > 100 and not resp.text.startswith('<'):
-            with open(filepath, 'wb') as f:
-                f.write(resp.content)
-            return f"/images/{filename}"
-    except Exception as e:
-        logger.error(f"Failed to download image {url}: {e}")
-    return url
 
 
 def scrape_nitter_profile(url):
     logger.info(f"Scraping Nitter profile: {url}")
     resp, session = fetch_with_anubis(url)
+
+    if resp is None:
+        return [], 'Blocked or challenge failed'
+
+    if resp.status_code == 403 or resp.status_code == 429:
+        logger.error(f"HTTP {resp.status_code} for {url} - rate limited or blocked")
+        return [], f'HTTP {resp.status_code} - rate limited or blocked'
+
     if resp.status_code != 200:
         logger.error(f"HTTP {resp.status_code} for {url}")
-        return [], None
+        return [], f'HTTP {resp.status_code}'
 
     if '<html' in resp.text[:500].lower() and ('not a bot' in resp.text.lower() or 'anubis' in resp.text.lower()):
-        logger.error(f"Still bot protection for {url}")
-        return [], None
+        logger.error(f"Still on challenge page for {url}")
+        return [], 'Bot protection not bypassed'
 
     soup = BeautifulSoup(resp.text, 'html.parser')
-    items = []
+    logger.info(f"Parsed HTML: title={soup.title.string if soup.title else 'none'}, found {len(soup.select('.timeline-item'))} timeline items, {len(soup.select('.tweet-content'))} tweet-contents")
 
     profile_avatar = ''
-    avatar_img = soup.select_one('.profile-avatar img')
+    avatar_img = soup.select_one('.profile-avatar img, .profile-card-avatar img')
     if avatar_img:
         profile_avatar = avatar_img.get('src', '')
         if profile_avatar and not profile_avatar.startswith('http'):
             profile_avatar = urljoin(url, profile_avatar)
 
-    timeline = soup.select('.timeline-item')
-    if not timeline:
-        logger.warning(f"No timeline items found for {url}")
-        return [], None
+    timeline_items = soup.select('.timeline-item')
+    if not timeline_items:
+        logger.warning(f"No .timeline-item found, trying alternative selectors")
+        timeline_items = soup.select('[class*="timeline"]')
 
-    for item in timeline:
-        tweet_link_tag = item.select_one('a.tweet-link')
-        if not tweet_link_tag:
-            tweet_link_tag = item.select_one('.tweet-date a')
+    items = []
+    for item in timeline_items:
         tweet_link = ''
-        if tweet_link_tag:
-            tweet_link = tweet_link_tag.get('href', '')
+        link_tag = item.select_one('a.tweet-link, .tweet-date a, [class*="tweet-date"] a')
+        if link_tag:
+            tweet_link = link_tag.get('href', '')
             if tweet_link and not tweet_link.startswith('http'):
                 tweet_link = urljoin(url, tweet_link)
 
         creator = ''
-        username_tag = item.select_one('.fullname')
+        fullname_tag = item.select_one('.fullname, .tweet-name, [class*="name"]')
+        if fullname_tag:
+            creator = fullname_tag.get_text(strip=True)
+        username_tag = item.select_one('.username, .tweet-screen-name, [class*="username"]')
+        username = ''
         if username_tag:
-            creator = username_tag.get_text(strip=True)
-        handle_tag = item.select_one('.username')
-        if handle_tag:
-            handle = handle_tag.get_text(strip=True)
-            if not creator:
-                creator = handle
+            username = username_tag.get_text(strip=True)
+        if not creator and username:
+            creator = username
 
-        content_tag = item.select_one('.tweet-content')
+        content_tag = item.select_one('.tweet-content, .tweet-body, [class*="tweet-content"]')
         description = ''
         if content_tag:
-            for br in content_tag.find_all('br'):
-                br.replace_with('\n')
-            for a in content_tag.find_all('a'):
-                href = a.get('href', '')
+            for a_tag in content_tag.find_all('a'):
+                href = a_tag.get('href', '')
                 if href and not href.startswith('http'):
-                    href = urljoin(url, href)
-                a.replace_with(f'<a href="{href}" target="_blank">{a.get_text()}</a>')
-            description = str(content_tag).replace('<div class="tweet-content">', '').replace('</div>', '').strip()
+                    a_tag['href'] = urljoin(url, href)
+                    a_tag['target'] = '_blank'
+            description = str(content_tag.decode_contents())
 
-        date_tag = item.select_one('.tweet-date a')
+        date_tag = item.select_one('.tweet-date a, [class*="tweet-date"] a, time')
         date_str = ''
-        timestamp = 0
+        timestamp = int(time.time())
         if date_tag:
-            date_str = date_tag.get('title', '')
-            if not date_str:
-                date_str = date_tag.get_text(strip=True)
-            try:
-                timestamp = datetime.strptime(date_str, '%b %d, %Y %I:%M:%S %p').timestamp()
-            except ValueError:
-                try:
-                    timestamp = datetime.strptime(date_str, '%d %b %Y %H:%M:%S %Z').timestamp()
-                except ValueError:
-                    timestamp = time.time()
+            date_str = date_tag.get('title', '') or date_tag.get_text(strip=True)
 
-        is_retweet = bool(item.select_one('.retweet-header'))
+        is_retweet = bool(item.select_one('.retweet-header, [class*="retweet"]'))
         rt_creator = ''
         if is_retweet:
-            rt_tag = item.select_one('.retweet-header .fullname')
-            if rt_tag:
-                rt_creator = rt_tag.get_text(strip=True)
+            rt_fullname = item.select_one('.retweet-header .fullname, .retweet-header [class*="name"]')
+            if rt_fullname:
+                rt_creator = rt_fullname.get_text(strip=True)
 
         avatar = profile_avatar
-        avatar_tag = item.select_one('.tweet-avatar img')
+        avatar_tag = item.select_one('.tweet-avatar img, .avatar img, [class*="avatar"] img')
         if avatar_tag:
             avatar = avatar_tag.get('src', '')
             if avatar and not avatar.startswith('http'):
                 avatar = urljoin(url, avatar)
 
-        images = item.select('.attachment img, .tweet-content img')
-        for img in images:
+        img_tags = item.select('.attachment img, .tweet-content img, [class*="attach"] img')
+        for img in img_tags:
             src = img.get('src', '')
             if src and not src.startswith('http'):
                 img['src'] = urljoin(url, src)
 
-        quote = item.select_one('.quote')
-        if quote:
-            quote_text = quote.get_text(strip=True)
-            description += f'\n<blockquote>{quote_text}</blockquote>'
+        if not description and not tweet_link:
+            continue
 
         items.append({
-            'title': description[:80] + '...' if len(description) > 80 else description,
+            'title': (description[:80] + '...') if len(description) > 80 else description,
             'description': description,
-            'link': tweet_link,
+            'link': tweet_link or '',
             'date': date_str,
-            'timestamp': timestamp or time.time(),
-            'creator': creator,
-            'profile_image': avatar,
-            'feed_title': soup.title.string.strip() if soup.title else url,
+            'timestamp': timestamp,
+            'creator': creator or username or 'Unbekannt',
+            'profile_image': avatar or profile_avatar,
+            'feed_title': soup.title.string.strip() if soup.title and soup.title.string else url,
             'feed_link': url,
             'is_retweet': is_retweet,
             'rt_creator': rt_creator,
@@ -310,13 +334,16 @@ def scrape_nitter_profile(url):
 def fetch_rss_feed(url):
     logger.info(f"Fetching RSS feed: {url}")
     resp, session = fetch_with_anubis(url)
+    if resp is None:
+        return [], 'Blocked or challenge failed'
+
     if '<html' in resp.text[:500].lower():
         logger.error(f"Got HTML instead of RSS for {url}")
-        return [], None
+        return [], 'Got HTML instead of RSS'
 
     feed = feedparser.parse(resp.text)
     if not feed.entries:
-        return [], None
+        return [], 'No entries in feed'
 
     profile_image = ''
     if feed.feed.get('image'):
@@ -327,11 +354,10 @@ def fetch_rss_feed(url):
     items = []
     for entry in feed.entries:
         date_str = entry.get('published', '')
-        from datetime import datetime as dt
         timestamp = 0
         for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%d %H:%M:%S']:
             try:
-                timestamp = dt.strptime(date_str, fmt).timestamp()
+                timestamp = datetime.strptime(date_str, fmt).timestamp()
                 break
             except ValueError:
                 pass
@@ -342,7 +368,6 @@ def fetch_rss_feed(url):
         title = entry.get('title', '')
         description = entry.get('description', entry.get('summary', ''))
         link = entry.get('link', '')
-
         is_retweet = bool(title.startswith('RT by'))
         rt_creator = ''
         if is_retweet:
@@ -371,6 +396,43 @@ def is_rss_url(url):
     return url.rstrip('/').endswith('/rss') or '/rss?' in url
 
 
+def download_image(url):
+    if not url:
+        return url
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    ext = '.jpg'
+    if '.png' in url.lower():
+        ext = '.png'
+    elif '.gif' in url.lower():
+        ext = '.gif'
+    elif '.webp' in url.lower():
+        ext = '.webp'
+    filename = f"{url_hash}{ext}"
+    filepath = os.path.join(IMAGES_DIR, filename)
+    if os.path.exists(filepath):
+        return f"/images/{filename}"
+    try:
+        resp, session = fetch_with_anubis(url)
+        if resp and resp.status_code == 200 and len(resp.content) > 100 and not resp.text.startswith('<'):
+            with open(filepath, 'wb') as f:
+                f.write(resp.content)
+            return f"/images/{filename}"
+    except Exception as e:
+        logger.error(f"Failed to download image: {e}")
+    return url
+
+
+def process_description_images(description):
+    def replace_img(match):
+        src = match.group(1)
+        local = download_image(src)
+        if local and local.startswith('/images/'):
+            return f'<img src="{local}" />'
+        return match.group(0)
+    description = re.sub(r'<img[^>]*src="([^"]+)"[^>]*/?\s*>', replace_img, description)
+    return description
+
+
 def refresh_and_cache():
     feeds = load_feeds()
     tweets = load_tweets()
@@ -381,7 +443,7 @@ def refresh_and_cache():
     for feed_url in feeds:
         last_refresh = cache_meta.get(feed_url, {}).get('last_refresh', 0)
         if time.time() - last_refresh < MIN_REFRESH_INTERVAL:
-            logger.info(f"Skipping {feed_url} - refreshed {(time.time() - last_refresh):.0f}s ago (min {MIN_REFRESH_INTERVAL}s)")
+            logger.info(f"Skipping {feed_url} - refreshed {(time.time() - last_refresh):.0f}s ago")
             continue
 
         try:
@@ -391,25 +453,28 @@ def refresh_and_cache():
                 items, profile_image = scrape_nitter_profile(feed_url)
 
             if not items:
-                errors.append({'url': feed_url, 'error': 'No items found'})
+                if profile_image is None:
+                    errors.append({'url': feed_url, 'error': 'Blocked or request failed'})
+                else:
+                    errors.append({'url': feed_url, 'error': 'No items found'})
                 continue
 
             for item in items:
-                tweet_id = item.get('link', '') or item.get('title', '')[:50]
-                if not tweet_id or tweet_id in tweets:
+                tweet_id = item.get('link', '') or hashlib.md5((item.get('title', '') + item.get('date', '')).encode()).hexdigest()
+                if tweet_id in tweets:
                     continue
 
                 profile_img = item.get('profile_image', '')
                 local_avatar = download_image(profile_img) if profile_img else ''
 
                 description = item.get('description', '')
-                if not is_rss_url(feed_url):
+                if is_rss_url(feed_url):
                     description = process_description_images(description)
 
                 tweets[tweet_id] = {
                     'title': item.get('title', ''),
                     'description': description,
-                    'link': tweet_id,
+                    'link': item.get('link', tweet_id),
                     'date': item.get('date', ''),
                     'timestamp': item.get('timestamp', 0),
                     'creator': item.get('creator', ''),
@@ -430,17 +495,6 @@ def refresh_and_cache():
     save_cache_meta(cache_meta)
     logger.info(f"Cached {new_count} new tweets, total {len(tweets)}")
     return new_count, len(tweets), errors
-
-
-def process_description_images(description):
-    def replace_img(match):
-        src = match.group(1)
-        local = download_image(src)
-        if local:
-            return f'<img src="{local}" />'
-        return match.group(0)
-    description = re.sub(r'<img[^>]*src="([^"]+)"[^>]*/?\s*>', replace_img, description)
-    return description
 
 
 @app.route('/')
@@ -520,10 +574,26 @@ def get_timeline():
     })
 
 
-@app.route('/api/cache-info')
-def cache_info():
-    cache_meta = load_cache_meta()
-    return jsonify(cache_meta)
+@app.route('/api/debug/<path:url>')
+def debug_fetch(url):
+    if not url.startswith('http'):
+        url = 'https://' + url
+    try:
+        resp, session = fetch_with_anubis(url)
+        if resp is None:
+            return jsonify({'error': 'Blocked or challenge failed', 'url': url})
+        return jsonify({
+            'url': url,
+            'status_code': resp.status_code,
+            'content_type': resp.headers.get('Content-Type', ''),
+            'content_length': len(resp.text),
+            'is_html': '<html' in resp.text[:500].lower(),
+            'is_rss': '<rss' in resp.text[:200].lower(),
+            'first_500': resp.text[:500],
+            'cookies': {c.name: c.value for c in session.cookies},
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'url': url})
 
 
 @app.route('/health')
@@ -533,6 +603,7 @@ def health():
         'total_tweets': len(load_tweets()),
         'total_feeds': len(load_feeds()),
         'min_refresh_interval': MIN_REFRESH_INTERVAL,
+        'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()},
     })
 
 
