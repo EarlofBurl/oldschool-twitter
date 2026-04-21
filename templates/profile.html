@@ -83,8 +83,8 @@
         .tweet-actions a { color: #8899A6; text-decoration: none; }
         .tweet-actions a:hover { color: #5595BF; }
         .retweet-indicator { color: #8899A6; font-size: 12px; margin-bottom: 4px; margin-left: 60px; }
-        .img-gallery { display: grid; gap: 4px; margin-top: 8px; border-radius: 8px; overflow: hidden; }
-        .img-gallery.g1 { grid-template-columns: 1fr; max-width: 500px; }
+        .img-gallery { display: grid; gap: 3px; margin-top: 8px; border-radius: 8px; overflow: hidden; }
+        .img-gallery.g1 { grid-template-columns: 1fr; }
         .img-gallery.g2 { grid-template-columns: 1fr 1fr; }
         .img-gallery.g3 { grid-template-columns: 1fr 1fr; }
         .img-gallery.g4 { grid-template-columns: 1fr 1fr; }
@@ -92,17 +92,13 @@
         .img-gallery.g4 .gi:first-child { grid-column: 1 / -1; }
         .img-gallery.g5,.img-gallery.g6,.img-gallery.g7,.img-gallery.g8,.img-gallery.g9 { grid-template-columns: 1fr 1fr 1fr; }
         .gi { position: relative; cursor: pointer; overflow: hidden; background: #E1E8ED; }
-        .gi img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.15s; }
+        .gi img { width: 100%; display: block; transition: filter 0.15s; }
         .gi:hover img { filter: brightness(0.85); }
         .gi.more-overlay::after { content: attr(data-more); position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; }
-        .gi.video-thumb::before { content: '▶'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.6); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 1; pointer-events: none; }
-        .img-gallery.g1 .gi { height: 280px; }
-        .img-gallery.g2 .gi { height: 200px; }
-        .img-gallery.g3 .gi:first-child { height: 220px; }
-        .img-gallery.g3 .gi:not(:first-child) { height: 180px; }
-        .img-gallery.g4 .gi:first-child { height: 180px; }
-        .img-gallery.g4 .gi:not(:first-child) { height: 160px; }
-        .img-gallery.g5 .gi,.img-gallery.g6 .gi,.img-gallery.g7 .gi,.img-gallery.g8 .gi,.img-gallery.g9 .gi { height: 140px; }
+        .gi.video-thumb::before { content: '\25B6'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.6); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 1; pointer-events: none; }
+        .img-gallery.g1 .gi { max-height: 400px; }
+        .img-gallery.g1 .gi img { max-height: 400px; object-fit: contain; background: #000; }
+        .img-gallery:not(.g1) .gi img { height: 100%; min-height: 120px; max-height: 220px; object-fit: cover; }
         .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .lightbox.open { display: flex; }
         .lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 4px; }
@@ -146,218 +142,167 @@
         </div>
     </div>
     <script>
-        let currentPage = 1;
-        let loading = false;
-        let hasMore = false;
-        let lightboxImages = [];
-        let lightboxIndex = 0;
-        let profileData = {};
+        var currentPage=1,loading=false,hasMore=false,lbImgs=[],lbIdx=0,profileData={};
 
-        const params = new URLSearchParams(window.location.search);
-        const feedUrl = params.get('feed') || '';
+        var params=new URLSearchParams(window.location.search);
+        var feedUrl=params.get('feed')||'';
 
-        if (!feedUrl) {
-            window.location.href = '/';
+        if(!feedUrl){window.location.href='/';}
+
+        function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+        function avatarFallback(el){
+            var d=document.createElement('div');
+            d.className='tweet-avatar';
+            d.style.cssText='background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px';
+            d.textContent=el.alt?el.alt.charAt(0).toUpperCase():'?';
+            el.parentNode.replaceChild(d,el);
         }
 
-        function openLightbox(tweetId, imgIndex) {
-            const gallery = document.querySelector(`[data-gallery="${tweetId}"]`);
-            if (!gallery) return;
-            lightboxImages = Array.from(gallery.querySelectorAll('.gi img')).map(img => img.src);
-            lightboxIndex = imgIndex;
-            showLightboxImage();
+        function profileAvatarFallback(el){
+            var d=document.createElement('div');
+            d.className='profile-avatar';
+            d.style.cssText='background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:30px';
+            d.textContent=el.alt?el.alt.charAt(0).toUpperCase():'?';
+            el.parentNode.replaceChild(d,el);
+        }
+
+        function openLB(tid,idx){
+            var g=document.querySelector('[data-gallery="'+tid+'"]');
+            if(!g)return;
+            lbImgs=Array.from(g.querySelectorAll('.gi img')).map(function(img){return img.src;});
+            lbIdx=idx;showLB();
             document.getElementById('lightbox').classList.add('open');
-            document.addEventListener('keydown', lightboxKeyHandler);
+            document.addEventListener('keydown',lbKey);
         }
-        function closeLightbox() {
-            document.getElementById('lightbox').classList.remove('open');
-            document.removeEventListener('keydown', lightboxKeyHandler);
-        }
-        function lightboxNav(dir) {
-            lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
-            showLightboxImage();
-        }
-        function showLightboxImage() {
-            document.getElementById('lightbox-img').src = lightboxImages[lightboxIndex];
-            document.getElementById('lightbox-counter').textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
-        }
-        function lightboxKeyHandler(e) {
-            if (e.key === 'Escape') closeLightbox();
-            else if (e.key === 'ArrowLeft') lightboxNav(-1);
-            else if (e.key === 'ArrowRight') lightboxNav(1);
-        }
-        function showToast(msg, type) {
-            const el = document.getElementById('toast');
-            el.textContent = msg;
-            el.className = 'show ' + type;
-            setTimeout(() => el.className = '', 5000);
-        }
+        function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.removeEventListener('keydown',lbKey);}
+        function lbNav(d){lbIdx=(lbIdx+d+lbImgs.length)%lbImgs.length;showLB();}
+        function showLB(){document.getElementById('lightbox-img').src=lbImgs[lbIdx];document.getElementById('lightbox-counter').textContent=(lbIdx+1)+' / '+lbImgs.length;}
+        function lbKey(e){if(e.key==='Escape')closeLightbox();else if(e.key==='ArrowLeft')lbNav(-1);else if(e.key==='ArrowRight')lbNav(1);}
 
-        async function loadProfile() {
-            try {
-                const res = await fetch(`/api/profile/${encodeURIComponent(feedUrl)}`);
-                const data = await res.json();
-                profileData = data;
-                document.title = `${data.creator || data.feed_title} - Oldschool Twitter`;
-                const headerEl = document.getElementById('profile-header');
-                const avatarHtml = data.profile_image
-                    ? `<img class="profile-avatar" src="${data.profile_image}" alt="${data.creator}" onerror="this.style.display='none'">`
-                    : `<div class="profile-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:30px">${(data.creator || '?').charAt(0).toUpperCase()}</div>`;
-                headerEl.innerHTML = `
-                    <div class="profile-banner"></div>
-                    <div class="profile-info">
-                        ${avatarHtml}
-                        <div class="profile-name">${data.feed_title || data.creator || 'Unbekannt'}</div>
-                        <div class="profile-handle">${data.creator || ''}</div>
-                        <div class="profile-source"><a href="${data.feed_url}" target="_blank">${data.feed_url}</a></div>
-                        <div class="profile-stats">
-                            <span><b>${data.total}</b> Tweets</span>
-                        </div>
-                        <div class="profile-actions">
-                            <button class="btn-subscribe ${data.is_subscribed ? 'subscribed' : ''}" onclick="toggleSubscribe()">
-                                ${data.is_subscribed ? 'Abonniert' : 'Abonnieren'}
-                            </button>
-                        </div>
-                    </div>
-                `;
-            } catch (e) {
-                showToast('Profil laden fehlgeschlagen', 'error');
-            }
-        }
+        function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;setTimeout(function(){el.className='';},5000);}
 
-        async function toggleSubscribe() {
-            const feeds = await (await fetch('/api/feeds')).json();
-            const isSub = feeds.includes(feedUrl);
-            try {
-                if (isSub) {
-                    if (!confirm('Feed entfernen und alle Tweets/Bilder löschen?')) return;
-                    await fetch('/api/feeds', {
-                        method: 'DELETE',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({url: feedUrl})
-                    });
-                    showToast('Feed entfernt', 'success');
+        async function loadProfile(){
+            try{
+                var res=await fetch('/api/profile/'+encodeURIComponent(feedUrl));
+                var data=await res.json();
+                profileData=data;
+                document.title=(data.creator||data.feed_title)+' - Oldschool Twitter';
+                var headerEl=document.getElementById('profile-header');
+                var avatarHtml;
+                if(data.profile_image){
+                    avatarHtml='<img class="profile-avatar" src="'+data.profile_image+'" alt="'+esc(data.creator)+'" onerror="profileAvatarFallback(this)">';
                 } else {
-                    await fetch('/api/feeds', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({url: feedUrl})
-                    });
-                    showToast('Feed abonniert!', 'success');
+                    avatarHtml='<div class="profile-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:30px">'+esc((data.creator||'?').charAt(0).toUpperCase())+'</div>';
+                }
+                headerEl.innerHTML='<div class="profile-banner"></div>'
+                    +'<div class="profile-info">'
+                    +avatarHtml
+                    +'<div class="profile-name">'+esc(data.feed_title||data.creator||'Unbekannt')+'</div>'
+                    +'<div class="profile-handle">'+esc(data.creator||'')+'</div>'
+                    +'<div class="profile-source"><a href="'+esc(data.feed_url)+'" target="_blank">'+esc(data.feed_url)+'</a></div>'
+                    +'<div class="profile-stats"><span><b>'+data.total+'</b> Tweets</span></div>'
+                    +'<div class="profile-actions"><button class="btn-subscribe '+(data.is_subscribed?'subscribed':'')+'" onclick="toggleSubscribe()">'+(data.is_subscribed?'Abonniert':'Abonnieren')+'</button></div>'
+                    +'</div>';
+            }catch(e){showToast('Profil laden fehlgeschlagen','error');}
+        }
+
+        async function toggleSubscribe(){
+            var feeds=await(await fetch('/api/feeds')).json();
+            var isSub=feeds.includes(feedUrl);
+            try{
+                if(isSub){
+                    if(!confirm('Feed entfernen und alle Tweets/Bilder löschen?'))return;
+                    await fetch('/api/feeds',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:feedUrl})});
+                    showToast('Feed entfernt','success');
+                }else{
+                    await fetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:feedUrl})});
+                    showToast('Feed abonniert!','success');
                 }
                 await loadProfile();
-            } catch (e) {
-                showToast('Fehler: ' + e.message, 'error');
-            }
+            }catch(e){showToast('Fehler: '+e.message,'error');}
         }
 
-        async function loadTimeline(append = false) {
-            if (loading) return;
-            loading = true;
-            const container = document.getElementById('timeline');
-            if (!append) {
-                container.innerHTML = '<div class="loading">Lade Tweets...</div>';
-                currentPage = 1;
-            }
-            try {
-                const res = await fetch(`/api/profile/${encodeURIComponent(feedUrl)}?page=${currentPage}&per_page=20`);
-                const data = await res.json();
-                const items = data.items || [];
-                hasMore = data.has_more;
-                if (!items.length && !append) {
-                    container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Für diesen Feed wurden keine Tweets gefunden.</div>';
-                    loading = false;
-                    return;
-                }
-                const html = items.map(item => renderTweet(item)).join('');
-                if (!append) container.innerHTML = html;
-                else container.insertAdjacentHTML('beforeend', html);
-            } catch (e) {
-                if (!append) container.innerHTML = '<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>' + e.message + '</div>';
-            } finally {
-                loading = false;
-            }
+        async function loadTimeline(append){
+            if(loading)return;
+            loading=true;
+            var container=document.getElementById('timeline');
+            if(!append){container.innerHTML='<div class="loading">Lade Tweets...</div>';currentPage=1;}
+            try{
+                var res=await fetch('/api/profile/'+encodeURIComponent(feedUrl)+'?page='+currentPage+'&per_page=20');
+                var data=await res.json();
+                var items=data.items||[];
+                hasMore=data.has_more;
+                if(!items.length&&!append){container.innerHTML='<div class="empty-state"><h3>Keine Tweets</h3>Für diesen Feed wurden keine Tweets gefunden.</div>';loading=false;return;}
+                var html=items.map(renderTweet).join('');
+                if(!append) container.innerHTML=html;
+                else container.insertAdjacentHTML('beforeend',html);
+            }catch(e){if(!append) container.innerHTML='<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>'+e.message+'</div>';}
+            finally{loading=false;}
         }
 
-        function extractImages(description) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = description;
-            const imgs = [];
-            tmp.querySelectorAll('img').forEach(img => { const src = img.getAttribute('src'); if (src) imgs.push(src); });
-            const videoThumbs = [];
-            tmp.querySelectorAll('a').forEach(a => {
-                const text = a.textContent.trim().toLowerCase();
-                const img = a.querySelector('img');
-                if ((text.includes('video') || text.includes('gif')) && img) {
-                    videoThumbs.push({src: img.getAttribute('src'), isVideo: true});
-                }
-            });
-            return {imgs, videoThumbs};
+        function extractImgs(desc){
+            var tmp=document.createElement('div');tmp.innerHTML=desc;
+            var imgs=[];tmp.querySelectorAll('img').forEach(function(img){var s=img.getAttribute('src');if(s)imgs.push(s);});
+            var vids=[];tmp.querySelectorAll('a').forEach(function(a){var t=a.textContent.trim().toLowerCase();var img=a.querySelector('img');if((t.includes('video')||t.includes('gif'))&&img)vids.push({src:img.getAttribute('src'),isVideo:true});});
+            return {imgs:imgs,vids:vids};
         }
 
-        function renderTweet(item) {
-            const creator = item.creator || 'Unbekannt';
-            const username = creator.replace('@', '');
-            const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
-            const isRt = item.is_retweet;
-            const rtCreator = item.rt_creator || '';
-            const tweetId = item.link || Math.random().toString(36).substr(2, 9);
-            const desc = item.description || item.title || '';
-            const {imgs, videoThumbs} = extractImages(desc);
-            let textOnly = desc;
-            const tmpDiv = document.createElement('div');
-            tmpDiv.innerHTML = desc;
-            tmpDiv.querySelectorAll('img').forEach(img => img.remove());
-            textOnly = tmpDiv.innerHTML;
-            let galleryHtml = '';
-            const allImages = [...imgs, ...videoThumbs.map(v => v.src)];
-            if (allImages.length > 0) {
-                const count = allImages.length;
-                const gridClass = count <= 9 ? `g${count}` : 'g9';
-                const maxShow = 9;
-                const showImages = allImages.slice(0, maxShow);
-                const hasMoreCount = count > maxShow;
-                const videoSrcSet = new Set(videoThumbs.map(v => v.src));
-                const itemsHtml = showImages.map((src, i) => {
-                    const isVideo = videoSrcSet.has(src);
-                    const isLast = i === maxShow - 1 && hasMoreCount;
-                    const moreText = isLast ? `+${count - maxShow + 1}` : '';
-                    const cls = `gi${isVideo ? ' video-thumb' : ''}${isLast ? ' more-overlay' : ''}`;
-                    return `<div class="${cls}" data-more="${moreText}" onclick="openLightbox('${tweetId}', ${i})"><img src="${src}" alt="" loading="lazy"></div>`;
+        function renderTweet(item){
+            var creator=item.creator||'Unbekannt';
+            var username=creator.replace('@','');
+            var date=item.date?new Date(item.date).toLocaleString('de-DE'):'';
+            var isRt=item.is_retweet;
+            var rtCreator=item.rt_creator||'';
+            var tid=item.link||Math.random().toString(36).substr(2,9);
+            var desc=item.description||item.title||'';
+            var ei=extractImgs(desc);
+            var tmpD=document.createElement('div');
+            tmpD.innerHTML=desc;
+            tmpD.querySelectorAll('img').forEach(function(img){img.remove();});
+            var textOnly=tmpD.innerHTML;
+            var pSrc=item.profile_image||'';
+            var avatarHtml;
+            if(pSrc){
+                avatarHtml='<img class="tweet-avatar" src="'+pSrc+'" alt="'+esc(username)+'" onerror="avatarFallback(this)">';
+            } else {
+                avatarHtml='<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">'+esc(username.charAt(0).toUpperCase())+'</div>';
+            }
+            var allImgs=ei.imgs.concat(ei.vids.map(function(v){return v.src;}));
+            var galleryHtml='';
+            if(allImgs.length>0){
+                var cnt=allImgs.length;
+                var gc=cnt<=9?'g'+cnt:'g9';
+                var maxS=9;
+                var show=allImgs.slice(0,maxS);
+                var hasMoreCnt=cnt>maxS;
+                var vidSet=new Set(ei.vids.map(function(v){return v.src;}));
+                var itemsHtml=show.map(function(src,i){
+                    var isV=vidSet.has(src);
+                    var isLast=i===maxS-1&&hasMoreCnt;
+                    var more=isLast?'+'+(cnt-maxS+1):'';
+                    var cls='gi'+(isV?' video-thumb':'')+(isLast?' more-overlay':'');
+                    return '<div class="'+cls+'" data-more="'+more+'" onclick="openLB(\''+esc(tid)+'\','+i+')"><img src="'+src+'" alt="" loading="lazy"></div>';
                 }).join('');
-                galleryHtml = `<div class="img-gallery ${gridClass}" data-gallery="${tweetId}">${itemsHtml}</div>`;
+                galleryHtml='<div class="img-gallery '+gc+'" data-gallery="'+esc(tid)+'">'+itemsHtml+'</div>';
             }
-            const profileSrc = item.profile_image || '';
-            const avatarHtml = profileSrc
-                ? `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.style.display='none'">`
-                : `<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
-            return `
-                <div class="tweet" style="overflow:auto;">
-                    ${isRt ? `<div class="retweet-indicator">&#8634; Retweet von ${rtCreator}</div>` : ''}
-                    <div class="tweet-header">
-                        ${avatarHtml}
-                        <span class="tweet-user">${username}</span>
-                        <span class="tweet-username">${creator}</span>
-                        <span class="tweet-time">${date}</span>
-                    </div>
-                    <div class="tweet-body">${textOnly}</div>
-                    ${galleryHtml ? `<div class="tweet-body">${galleryHtml}</div>` : ''}
-                    <div class="tweet-actions">
-                        <a href="${item.link}" target="_blank">&#128279; Auf Nitter ansehen</a>
-                    </div>
-                </div>
-            `;
+            var rtHtml=isRt?'<div class="retweet-indicator">&#8634; Retweet von '+esc(rtCreator)+'</div>':'';
+            var gallerySection=galleryHtml?'<div class="tweet-body">'+galleryHtml+'</div>':'';
+            return '<div class="tweet" style="overflow:auto;">'
+                +rtHtml
+                +'<div class="tweet-header">'
+                +avatarHtml
+                +'<span class="tweet-user">'+esc(username)+'</span>'
+                +'<span class="tweet-username">'+esc(creator)+'</span>'
+                +'<span class="tweet-time">'+date+'</span>'
+                +'</div>'
+                +'<div class="tweet-body">'+textOnly+'</div>'
+                +gallerySection
+                +'<div class="tweet-actions"><a href="'+item.link+'" target="_blank">&#128279; Auf Nitter ansehen</a></div>'
+                +'</div>';
         }
 
-        function loadMore() {
-            if (!hasMore || loading) return;
-            currentPage++;
-            loadTimeline(true);
-        }
-
-        window.addEventListener('scroll', () => {
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300) loadMore();
-        });
+        window.addEventListener('scroll',function(){if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300&&!hasMore||loading)return;if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){currentPage++;loadTimeline(true);}});
 
         loadProfile();
         loadTimeline();

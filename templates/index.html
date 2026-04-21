@@ -318,27 +318,58 @@ function renderTweet(item){
     var tid=item.link||Math.random().toString(36).substr(2,9);
     var desc=item.description||item.title||'';
     var ei=extractImgs(desc);
-    var tmpD=document.createElement('div');tmpD.innerHTML=desc;tmpD.querySelectorAll('img').forEach(function(img){img.remove();});
+    var tmpD=document.createElement('div');
+    tmpD.innerHTML=desc;
+    tmpD.querySelectorAll('img').forEach(function(img){img.remove();});
     var textOnly=tmpD.innerHTML;
     var pSrc=item.profile_image||'';
-    var avatarHtml=pSrc?'<img class="tweet-avatar" src="'+pSrc+'" alt="'+esc(username)+'" onerror="this.outerHTML=\'<div class=\\'tweet-avatar\\' style=\\'background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px\\'>'+esc(username.charAt(0).toUpperCase())+'</div>\'">':'<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">'+esc(username.charAt(0).toUpperCase())+'</div>';
+    var avatarHtml;
+    if(pSrc){
+        avatarHtml='<img class="tweet-avatar" src="'+pSrc+'" alt="'+esc(username)+'" onerror="avatarFallback(this)">';
+    } else {
+        avatarHtml='<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">'+esc(username.charAt(0).toUpperCase())+'</div>';
+    }
     var allImgs=ei.imgs.concat(ei.vids.map(function(v){return v.src;}));
     var galleryHtml='';
     if(allImgs.length>0){
         var cnt=allImgs.length;
         var gc=cnt<=9?'g'+cnt:'g9';
-        var maxS=9,show=allImgs.slice(0,maxS),hasMore=cnt>maxS;
+        var maxS=9;
+        var show=allImgs.slice(0,maxS);
+        var hasMoreCnt=cnt>maxS;
         var vidSet=new Set(ei.vids.map(function(v){return v.src;}));
         var itemsHtml=show.map(function(src,i){
             var isV=vidSet.has(src);
-            var isLast=i===maxS-1&&hasMore;
+            var isLast=i===maxS-1&&hasMoreCnt;
             var more=isLast?'+'+(cnt-maxS+1):'';
             var cls='gi'+(isV?' video-thumb':'')+(isLast?' more-overlay':'');
             return '<div class="'+cls+'" data-more="'+more+'" onclick="openLB(\''+esc(tid)+'\','+i+')"><img src="'+src+'" alt="" loading="lazy"></div>';
         }).join('');
         galleryHtml='<div class="img-gallery '+gc+'" data-gallery="'+esc(tid)+'">'+itemsHtml+'</div>';
     }
-    return '<div class="tweet" style="overflow:auto;">'+(isRt?'<div class="retweet-indicator">&#8634; Retweet von '+esc(rtCreator)+'</div>':'')+'<div class="tweet-header">'+avatarHtml+'<span class="tweet-user" onclick="goProfile(\''+esc(item.feed_link||'')+'\')">'+esc(username)+'</span><span class="tweet-username">'+esc(creator)+'</span><span class="tweet-time">'+date+'</span></div><div class="tweet-body">'+textOnly+'</div>'+(galleryHtml?'<div class="tweet-body">'+galleryHtml+'</div>':'')+'<div class="tweet-actions"><a href="'+item.link+'" target="_blank">&#128279; Nitter</a></div></div>';
+    var rtHtml=isRt?'<div class="retweet-indicator">&#8634; Retweet von '+esc(rtCreator)+'</div>':'';
+    var gallerySection=galleryHtml?'<div class="tweet-body">'+galleryHtml+'</div>':'';
+    var feedLink=item.feed_link||'';
+    return '<div class="tweet" style="overflow:auto;">'
+        +rtHtml
+        +'<div class="tweet-header">'
+        +avatarHtml
+        +'<span class="tweet-user" onclick="goProfile(\''+esc(feedLink)+'\')">'+esc(username)+'</span>'
+        +'<span class="tweet-username">'+esc(creator)+'</span>'
+        +'<span class="tweet-time">'+date+'</span>'
+        +'</div>'
+        +'<div class="tweet-body">'+textOnly+'</div>'
+        +gallerySection
+        +'<div class="tweet-actions"><a href="'+item.link+'" target="_blank">&#128279; Nitter</a></div>'
+        +'</div>';
+}
+
+function avatarFallback(el){
+    var d=document.createElement('div');
+    d.className='tweet-avatar';
+    d.style.cssText='background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px';
+    d.textContent=el.alt?el.alt.charAt(0).toUpperCase():'?';
+    el.parentNode.replaceChild(d,el);
 }
 
 function openLB(tid,idx){
