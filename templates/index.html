@@ -65,7 +65,7 @@
             box-shadow: 0 0 15px rgba(0,0,0,0.1);
         }
 
-        /* --- Sidebar / Feeds Page --- */
+        /* --- Sidebar --- */
         #sidebar {
             position: fixed;
             top: 50px;
@@ -132,51 +132,25 @@
             color: #8899A6;
             margin-top: 6px;
         }
-        #sidebar .feed-list {
-            flex: 1;
-            overflow-y: auto;
-        }
+        #sidebar .feed-list { flex: 1; overflow-y: auto; }
         #sidebar .feed-item {
             padding: 10px 15px;
             border-bottom: 1px solid #E1E8ED;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            cursor: default;
         }
         #sidebar .feed-item:hover { background: #E1E8ED; }
-        #sidebar .feed-item .feed-name {
-            font-weight: bold;
-            color: #333;
-            font-size: 14px;
-        }
-        #sidebar .feed-item .feed-url {
-            font-size: 11px;
-            color: #8899A6;
-            display: block;
-            margin-top: 2px;
-            word-break: break-all;
-        }
+        #sidebar .feed-item .feed-name { font-weight: bold; color: #333; font-size: 14px; }
+        #sidebar .feed-item .feed-url { font-size: 11px; color: #8899A6; display: block; margin-top: 2px; word-break: break-all; }
         #sidebar .feed-item .feed-delete {
-            background: none;
-            border: none;
-            color: #8899A6;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 3px;
-            flex-shrink: 0;
+            background: none; border: none; color: #8899A6; font-size: 18px;
+            cursor: pointer; padding: 4px 8px; border-radius: 3px; flex-shrink: 0;
         }
         #sidebar .feed-item .feed-delete:hover { color: #C62828; background: #FFEBEE; }
         .sidebar-overlay {
-            position: fixed;
-            top: 50px;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.3);
-            z-index: 85;
-            display: none;
+            position: fixed; top: 50px; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); z-index: 85; display: none;
         }
         .sidebar-overlay.open { display: block; }
 
@@ -221,11 +195,6 @@
             color: #333;
         }
         .tweet-body p { margin-bottom: 6px; }
-        .tweet-body img {
-            max-width: 100%;
-            border-radius: 5px;
-            margin: 4px 0;
-        }
         .tweet-body a { color: #5595BF !important; text-decoration: none; }
         .tweet-body a:hover { text-decoration: underline; }
         .tweet-body blockquote {
@@ -251,20 +220,141 @@
             margin-bottom: 4px;
             margin-left: 60px;
         }
+
+        /* --- Image Gallery --- */
+        .img-gallery {
+            display: grid;
+            gap: 4px;
+            margin-top: 8px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .img-gallery.g1 { grid-template-columns: 1fr; max-width: 500px; }
+        .img-gallery.g2 { grid-template-columns: 1fr 1fr; }
+        .img-gallery.g3 { grid-template-columns: 1fr 1fr; }
+        .img-gallery.g4 { grid-template-columns: 1fr 1fr; }
+        .img-gallery.g3 .gi:first-child { grid-column: 1 / -1; }
+        .img-gallery.g4 .gi:first-child { grid-column: 1 / -1; }
+        .img-gallery.g5, .img-gallery.g6, .img-gallery.g7, .img-gallery.g8, .img-gallery.g9 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+        .gi {
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            background: #E1E8ED;
+        }
+        .gi img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: filter 0.15s;
+        }
+        .gi:hover img { filter: brightness(0.85); }
+        .gi.more-overlay::after {
+            content: attr(data-more);
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .gi.video-thumb::before {
+            content: '▶';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.6);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .img-gallery.g1 .gi { height: 280px; }
+        .img-gallery.g2 .gi { height: 200px; }
+        .img-gallery.g3 .gi:first-child { height: 220px; }
+        .img-gallery.g3 .gi:not(:first-child) { height: 180px; }
+        .img-gallery.g4 .gi:first-child { height: 180px; }
+        .img-gallery.g4 .gi:not(:first-child) { height: 160px; }
+        .img-gallery.g5 .gi, .img-gallery.g6 .gi, .img-gallery.g7 .gi, .img-gallery.g8 .gi, .img-gallery.g9 .gi {
+            height: 140px;
+        }
+
+        /* --- Lightbox --- */
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 500;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .lightbox.open { display: flex; }
+        .lightbox img {
+            max-width: 90vw;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 36px;
+            cursor: pointer;
+            z-index: 510;
+        }
+        .lightbox-close:hover { color: #ccc; }
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 510;
+        }
+        .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+        .lightbox-prev { left: 15px; }
+        .lightbox-next { right: 15px; }
+        .lightbox-counter {
+            position: absolute;
+            bottom: 20px;
+            color: white;
+            font-size: 14px;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+
         .loading { text-align: center; padding: 40px; color: #8899A6; }
         .empty-state { text-align: center; padding: 50px 20px; color: #8899A6; }
         .empty-state h3 { margin-bottom: 10px; color: #333; font-size: 16px; }
         #toast {
-            position: fixed;
-            top: 60px;
-            right: 10px;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 13px;
-            z-index: 200;
-            display: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            max-width: 400px;
+            position: fixed; top: 60px; right: 10px; padding: 10px 20px;
+            border-radius: 5px; font-size: 13px; z-index: 200;
+            display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); max-width: 400px;
         }
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
@@ -274,6 +364,14 @@
 <body>
     <div id="toast"></div>
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <button class="lightbox-nav lightbox-prev" onclick="lightboxNav(-1)">&#8249;</button>
+        <button class="lightbox-nav lightbox-next" onclick="lightboxNav(1)">&#8250;</button>
+        <img id="lightbox-img" src="" alt="">
+        <div class="lightbox-counter" id="lightbox-counter"></div>
+    </div>
 
     <div id="header">
         <div class="left" onclick="toggleSidebar()">
@@ -294,7 +392,7 @@
         <div class="feed-add">
             <input type="text" id="feed-url" placeholder="Nitter Profil-URL oder RSS-URL">
             <button id="add-btn" onclick="addFeed()">Feed hinzufügen</button>
-            <div class="feed-hint">Profil: https://nitter.net/user &nbsp;|&nbsp; RSS: https://nitter.net/user/rss<br>Min. 10 Min zwischen Aktualisierungen.</div>
+            <div class="feed-hint">Profil: https://nitter.net/user | RSS: https://nitter.net/user/rss<br>Min. 10 Min zwischen Aktualisierungen.</div>
         </div>
         <div class="feed-list" id="feed-list"></div>
     </div>
@@ -314,6 +412,8 @@
         let loading = false;
         let hasMore = false;
         let sidebarOpen = false;
+        let lightboxImages = [];
+        let lightboxIndex = 0;
 
         function toggleSidebar() {
             sidebarOpen = !sidebarOpen;
@@ -326,6 +426,37 @@
         document.getElementById('sidebar-overlay').addEventListener('click', () => {
             if (sidebarOpen) toggleSidebar();
         });
+
+        function openLightbox(tweetId, imgIndex) {
+            const gallery = document.querySelector(`[data-gallery="${tweetId}"]`);
+            if (!gallery) return;
+            lightboxImages = Array.from(gallery.querySelectorAll('.gi img')).map(img => img.src);
+            lightboxIndex = imgIndex;
+            showLightboxImage();
+            document.getElementById('lightbox').classList.add('open');
+            document.addEventListener('keydown', lightboxKeyHandler);
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('open');
+            document.removeEventListener('keydown', lightboxKeyHandler);
+        }
+
+        function lightboxNav(dir) {
+            lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
+            showLightboxImage();
+        }
+
+        function showLightboxImage() {
+            document.getElementById('lightbox-img').src = lightboxImages[lightboxIndex];
+            document.getElementById('lightbox-counter').textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
+        }
+
+        function lightboxKeyHandler(e) {
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowLeft') lightboxNav(-1);
+            else if (e.key === 'ArrowRight') lightboxNav(1);
+        }
 
         function showToast(msg, type) {
             const el = document.getElementById('toast');
@@ -432,27 +563,22 @@
             if (loading) return;
             loading = true;
             const container = document.getElementById('timeline');
-
             if (!append) {
                 container.innerHTML = '<div class="loading">Lade Timeline...</div>';
                 currentPage = 1;
             }
-
             try {
                 const res = await fetch(`/api/timeline?page=${currentPage}&per_page=20`);
                 if (!res.ok) throw new Error('Server error');
                 const data = await res.json();
                 const items = data.items || [];
                 hasMore = data.has_more;
-
                 document.getElementById('tweet-count').textContent = `${data.total} Tweets geladen`;
-
                 if (!items.length && !append) {
                     container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Klicke "Aktualisieren" um Tweets zu laden.</div>';
                     loading = false;
                     return;
                 }
-
                 const html = items.map(item => renderTweet(item)).join('');
                 if (!append) {
                     container.innerHTML = html;
@@ -468,6 +594,25 @@
             }
         }
 
+        function extractImages(description) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = description;
+            const imgs = [];
+            tmp.querySelectorAll('img').forEach(img => {
+                const src = img.getAttribute('src');
+                if (src) imgs.push(src);
+            });
+            const videoThumbs = [];
+            tmp.querySelectorAll('a').forEach(a => {
+                const text = a.textContent.trim().toLowerCase();
+                const img = a.querySelector('img');
+                if ((text.includes('video') || text.includes('gif')) && img) {
+                    videoThumbs.push({src: img.getAttribute('src'), link: a.getAttribute('href'), isVideo: true});
+                }
+            });
+            return {imgs, videoThumbs};
+        }
+
         function renderTweet(item) {
             const creator = item.creator || 'Unbekannt';
             const username = creator.replace('@', '');
@@ -475,12 +620,43 @@
             const date = item.date ? new Date(item.date).toLocaleString('de-DE') : '';
             const isRt = item.is_retweet;
             const rtCreator = item.rt_creator || '';
+            const tweetId = item.link || Math.random().toString(36).substr(2, 9);
 
             let avatarHtml;
             if (profileSrc) {
                 avatarHtml = `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.outerHTML='<div class=\\'tweet-avatar\\' style=\\'background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px\\'>${username.charAt(0).toUpperCase()}</div>'">`;
             } else {
                 avatarHtml = `<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
+            }
+
+            const desc = item.description || item.title || '';
+            const {imgs, videoThumbs} = extractImages(desc);
+
+            let textOnly = desc;
+            const tmpDiv = document.createElement('div');
+            tmpDiv.innerHTML = desc;
+            tmpDiv.querySelectorAll('img').forEach(img => img.remove());
+            textOnly = tmpDiv.innerHTML;
+
+            let galleryHtml = '';
+            const allImages = [...imgs, ...videoThumbs.map(v => v.src)];
+            if (allImages.length > 0) {
+                const count = allImages.length;
+                const gridClass = count <= 4 ? `g${count}` : count <= 9 ? `g${count}` : 'g9';
+                const maxShow = 9;
+                const showImages = allImages.slice(0, maxShow);
+                const hasMore = count > maxShow;
+                const videoSrcSet = new Set(videoThumbs.map(v => v.src));
+
+                const itemsHtml = showImages.map((src, i) => {
+                    const isVideo = videoSrcSet.has(src);
+                    const isLast = i === maxShow - 1 && hasMore;
+                    const moreText = isLast ? `+${count - maxShow + 1}` : '';
+                    const cls = `gi${isVideo ? ' video-thumb' : ''}${isLast ? ' more-overlay' : ''}`;
+                    return `<div class="${cls}" data-more="${moreText}" onclick="openLightbox('${tweetId}', ${i})"><img src="${src}" alt="" loading="lazy"></div>`;
+                }).join('');
+
+                galleryHtml = `<div class="img-gallery ${gridClass}" data-gallery="${tweetId}">${itemsHtml}</div>`;
             }
 
             return `
@@ -492,7 +668,8 @@
                         <span class="tweet-username">${creator}</span>
                         <span class="tweet-time">${date}</span>
                     </div>
-                    <div class="tweet-body">${item.description || item.title || ''}</div>
+                    <div class="tweet-body">${textOnly}</div>
+                    ${galleryHtml ? `<div class="tweet-body">${galleryHtml}</div>` : ''}
                     <div class="tweet-actions">
                         <a href="${item.link}" target="_blank">&#128279; Auf Nitter ansehen</a>
                     </div>
