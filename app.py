@@ -396,7 +396,7 @@ def is_rss_url(url):
     return url.rstrip('/').endswith('/rss') or '/rss?' in url
 
 
-def download_image(url):
+def download_image(url, feed_url=None):
     if not url:
         return url
     url_hash = hashlib.md5(url.encode()).hexdigest()
@@ -409,23 +409,92 @@ def download_image(url):
         ext = '.webp'
     filename = f"{url_hash}{ext}"
     filepath = os.path.join(IMAGES_DIR, filename)
+    local_path = f"/images/{filename}"
     if os.path.exists(filepath):
-        return f"/images/{filename}"
+        if feed_url:
+            _track_image(feed_url, local_path)
+        return local_path
     try:
         resp, session = fetch_with_anubis(url)
         if resp and resp.status_code == 200 and len(resp.content) > 100 and not resp.text.startswith('<'):
             with open(filepath, 'wb') as f:
                 f.write(resp.content)
-            return f"/images/{filename}"
+            if feed_url:
+                _track_image(feed_url, local_path)
+            return local_path
     except Exception as e:
         logger.error(f"Failed to download image: {e}")
     return url
 
 
-def process_description_images(description):
+def _track_image(feed_url, local_path):
+    cache_meta = load_cache_meta()
+    if feed_url not in cache_meta:
+        cache_meta[feed_url] = {}
+    if 'images' not in cache_meta[feed_url]:
+        cache_meta[feed_url]['images'] = []
+    if local_path not in cache_meta[feed_url]['images']:
+        cache_meta[feed_url]['images'].append(local_path)
+    save_cache_meta(cache_meta)
+
+
+def _delete_feed_data(feed_url):
+    tweets = load_tweets()
+    cache_meta = load_cache_meta()
+
+    images_to_delete = set()
+    tweet_ids_to_remove = []
+
+    for tweet_id, tweet in tweets.items():
+        if tweet.get('feed_link') == feed_url:
+            if tweet.get('profile_image', '').startswith('/images/'):
+                images_to_delete.add(tweet['profile_image'])
+            for img_match in re.findall(r'/images/[a-f0-9]+\.\w+', tweet.get('description', '')):
+                images_to_delete.add(img_match)
+            tweet_ids_to_remove.append(tweet_id)
+
+    if feed_url in cache_meta:
+        feed_images = cache_meta[feed_url].get('images', [])
+        images_to_delete.update(feed_images)
+        del cache_meta[feed_url]
+
+    remaining_images = set()
+    for tweet_id, tweet in tweets.items():
+        if tweet_id not in tweet_ids_to_remove:
+            if tweet.get('profile_image', '').startswith('/images/'):
+                remaining_images.add(tweet['profile_image'])
+            for img_match in re.findall(r'/images/[a-f0-9]+\.\w+', tweet.get('description', '')):
+                remaining_images.add(img_match)
+    for other_feed, feed_data in cache_meta.items():
+        for img in feed_data.get('images', []):
+            remaining_images.add(img)
+
+    images_to_delete -= remaining_images
+
+    for image_path in images_to_delete:
+        filename = image_path.replace('/images/', '')
+        filepath = os.path.join(IMAGES_DIR, filename)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+                logger.info(f"Deleted image: {filename}")
+            except Exception as e:
+                logger.error(f"Failed to delete image {filename}: {e}")
+
+    for tweet_id in tweet_ids_to_remove:
+        del tweets[tweet_id]
+
+    save_tweets(tweets)
+    save_cache_meta(cache_meta)
+
+    logger.info(f"Deleted {len(tweet_ids_to_remove)} tweets and {len(images_to_delete)} images for feed {feed_url}")
+    return len(images_to_delete)
+
+
+def process_description_images(description, feed_url=None):
     def replace_img(match):
         src = match.group(1)
-        local = download_image(src)
+        local = download_image(src, feed_url)
         if local and local.startswith('/images/'):
             return f'<img src="{local}" />'
         return match.group(0)
@@ -465,11 +534,11 @@ def refresh_and_cache():
                     continue
 
                 profile_img = item.get('profile_image', '')
-                local_avatar = download_image(profile_img) if profile_img else ''
+                local_avatar = download_image(profile_img, feed_url) if profile_img else ''
 
                 description = item.get('description', '')
                 if is_rss_url(feed_url):
-                    description = process_description_images(description)
+                    description = process_description_images(description, feed_url)
 
                 tweets[tweet_id] = {
                     'title': item.get('title', ''),
@@ -535,6 +604,9 @@ def remove_feed():
     if url in feeds:
         feeds.remove(url)
         save_feeds(feeds)
+        images_deleted = _delete_feed_data(url)
+        tweets = load_tweets()
+        return jsonify({'feeds': feeds, 'deleted_images': images_deleted, 'remaining_tweets': len(tweets)})
     return jsonify({'feeds': feeds})
 
 
