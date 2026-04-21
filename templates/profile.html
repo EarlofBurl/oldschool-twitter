@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profil - Oldschool Twitter</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' fill='%235595BF'/%3E%3C/svg%3E">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -53,6 +54,13 @@
         }
         .profile-stats span { color: #8899A6; }
         .profile-stats b { color: #333; }
+        .profile-tagcloud { margin-top: 10px; }
+        .ptc-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+        .ptc-tag { background: #E1E8ED; color: #5595BF; padding: 2px 7px; border-radius: 10px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+        .ptc-tag:hover { background: #5595BF; color: white; }
+        .ptc-tag.active { background: #5595BF; color: white; }
+        .ptc-filter-info { margin-top: 6px; padding: 4px 8px; background: #FFEBEE; color: #C62828; border-radius: 4px; font-size: 11px; display: none; align-items: center; justify-content: space-between; }
+        .ptc-filter-info.show { display: flex; }
 
         .timeline { background-color: white; }
         .tweet { border-bottom: 1px solid #E1E8ED; padding: 12px 20px; }
@@ -132,7 +140,7 @@
         </div>
     </div>
     <script>
-        var currentPage=1,loading=false,hasMore=false,lbImgs=[],lbIdx=0,profileData={};
+        var currentPage=1,loading=false,hasMore=false,lbImgs=[],lbIdx=0,profileData={},activeTag='';
 
         var params=new URLSearchParams(window.location.search);
         var feedUrl=params.get('feed')||'';
@@ -172,6 +180,38 @@
 
         function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;setTimeout(function(){el.className='';},5000);}
 
+        function loadHashtags(){
+            fetch('/api/hashtags?feed_url='+encodeURIComponent(feedUrl)).then(function(r){return r.json();}).then(function(data){
+                var tags=data.hashtags||[];
+                var c=document.getElementById('ptc-tags');
+                if(!c)return;
+                if(!tags.length){c.innerHTML='<span style="color:#8899A6;font-size:11px">Keine Hashtags</span>';return;}
+                c.innerHTML=tags.map(function(t){
+                    var sz=Math.min(10+t.count*2,18);
+                    var cls='ptc-tag'+(activeTag===t.tag?' active':'');
+                    return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+' <small>'+t.count+'</small></span>';
+                }).join('');
+            }).catch(function(){});
+        }
+
+        function filterByTag(tag){
+            if(activeTag===tag){clearTagFilter();return;}
+            activeTag=tag;
+            document.getElementById('ptc-filter-label').textContent='Filter: '+tag;
+            document.getElementById('ptc-filter-info').classList.add('show');
+            currentPage=1;
+            loadTimeline();
+            loadHashtags();
+        }
+
+        function clearTagFilter(){
+            activeTag='';
+            document.getElementById('ptc-filter-info').classList.remove('show');
+            currentPage=1;
+            loadTimeline();
+            loadHashtags();
+        }
+
         async function loadProfile(){
             try{
                 var res=await fetch('/api/profile/'+encodeURIComponent(feedUrl));
@@ -193,8 +233,10 @@
                     +'<div class="profile-handle">'+esc(data.creator||'')+'</div>'
                     +'<div class="profile-source"><a href="'+esc(data.feed_url)+'" target="_blank">'+esc(data.feed_url)+'</a></div>'
                     +'<div class="profile-stats"><span><b>'+data.total+'</b> Tweets</span></div>'
+                    +'<div class="profile-tagcloud"><div style="font-size:12px;font-weight:bold;color:#333">Themen</div><div class="ptc-tags" id="ptc-tags"></div><div class="ptc-filter-info" id="ptc-filter-info"><span id="ptc-filter-label"></span><button onclick="clearTagFilter()" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:11px">Entfernen</button></div></div>'
                     +'</div>'
                     +'</div>';
+                loadHashtags();
             }catch(e){showToast('Profil laden fehlgeschlagen','error');}
         }
 
@@ -204,7 +246,9 @@
             var container=document.getElementById('timeline');
             if(!append){container.innerHTML='<div class="loading">Lade Tweets...</div>';currentPage=1;}
             try{
-                var res=await fetch('/api/profile/'+encodeURIComponent(feedUrl)+'?page='+currentPage+'&per_page=20');
+                var url='/api/profile/'+encodeURIComponent(feedUrl)+'?page='+currentPage+'&per_page=20';
+                if(activeTag) url+='&hashtag='+encodeURIComponent(activeTag);
+                var res=await fetch(url);
                 var data=await res.json();
                 var items=data.items||[];
                 hasMore=data.has_more;

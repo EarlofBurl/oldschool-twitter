@@ -566,6 +566,25 @@ def refresh_and_cache():
     return new_count, len(tweets), errors
 
 
+def extract_hashtags(text):
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    return [t.lower() for t in re.findall(r'#(\w+)', clean)]
+
+
+@app.route('/api/hashtags')
+def get_hashtags():
+    feed_url = request.args.get('feed_url', '').strip()
+    tweets = load_tweets()
+    tag_counts = {}
+    for tweet in tweets.values():
+        if feed_url and tweet.get('feed_link') != feed_url:
+            continue
+        for tag in extract_hashtags(tweet.get('description', '') + ' ' + tweet.get('title', '')):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:50]
+    return jsonify({'hashtags': [{'tag': '#' + t, 'count': c} for t, c in sorted_tags]})
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -661,11 +680,18 @@ def get_profile(feed_url):
         feed_url = 'https://' + feed_url
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    hashtag = request.args.get('hashtag', '').strip().lower()
 
     tweets = load_tweets()
     feeds = load_feeds()
 
     feed_tweets = [t for t in tweets.values() if t.get('feed_link') == feed_url]
+
+    if hashtag:
+        if not hashtag.startswith('#'):
+            hashtag = '#' + hashtag
+        feed_tweets = [t for t in feed_tweets if hashtag in extract_hashtags(t.get('description', '') + ' ' + t.get('title', ''))]
+
     feed_tweets.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
 
     creator = ''
@@ -742,9 +768,15 @@ def refresh():
 def get_timeline():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    hashtag = request.args.get('hashtag', '').strip().lower()
 
     tweets = load_tweets()
     sorted_tweets = sorted(tweets.values(), key=lambda x: x.get('timestamp', 0), reverse=True)
+
+    if hashtag:
+        if not hashtag.startswith('#'):
+            hashtag = '#' + hashtag
+        sorted_tweets = [t for t in sorted_tweets if hashtag in extract_hashtags(t.get('description', '') + ' ' + t.get('title', ''))]
 
     start = (page - 1) * per_page
     end = start + per_page
