@@ -63,21 +63,21 @@
         .sidebar-overlay { position: fixed; top: 50px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 85; display: none; }
         .sidebar-overlay.open { display: block; }
 
-        /* --- Hashtag Cloud --- */
-        #tagcloud { padding: 12px 20px; border-bottom: 1px solid #E1E8ED; background: linear-gradient(135deg, #F5F8FA 0%, #E8F0F8 100%); }
-        .tc-header { font-weight: bold; font-size: 13px; color: #5595BF; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .tc-toggle { background: none; border: none; font-size: 14px; cursor: pointer; color: #8899A6; }
+        /* --- Hashtag Cloud (left side) --- */
+        #tagcloud { position: fixed; top: 50px; left: 0; bottom: 0; width: 200px; background: #F5F8FA; border-right: 1px solid #E1E8ED; overflow-y: auto; padding: 12px 10px; z-index: 80; }
+        .tc-header { font-weight: bold; font-size: 13px; color: #5595BF; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .tc-toggle { background: none; border: none; font-size: 12px; cursor: pointer; color: #8899A6; }
         .tc-toggle:hover { color: #5595BF; }
-        .tc-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: center; padding: 4px 0; }
-        .tc-tag { background: white; color: #5595BF; padding: 3px 10px; border-radius: 14px; font-size: 12px; cursor: pointer; white-space: nowrap; border: 1px solid #D6E4EF; transition: all 0.15s; }
-        .tc-tag:hover { background: #5595BF; color: white; border-color: #5595BF; transform: scale(1.05); }
+        .tc-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+        .tc-tag { background: white; color: #5595BF; padding: 3px 9px; border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; border: 1px solid #D6E4EF; transition: all 0.15s; display: inline-block; }
+        .tc-tag:hover { background: #5595BF; color: white; border-color: #5595BF; }
         .tc-tag.active { background: #5595BF; color: white; border-color: #3B7BA8; }
-        .tc-filter-info { margin-top: 8px; padding: 6px 10px; background: #FFF3E0; color: #E65100; border-radius: 14px; font-size: 12px; display: none; align-items: center; justify-content: space-between; border: 1px solid #FFE0B2; }
+        .tc-filter-info { margin-top: 8px; padding: 5px 8px; background: #FFF3E0; color: #E65100; border-radius: 10px; font-size: 11px; display: none; align-items: center; justify-content: space-between; border: 1px solid #FFE0B2; }
         .tc-filter-info.show { display: flex; }
-        .tc-filter-info button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .tc-filter-info button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 11px; }
 
         /* --- Main --- */
-        #main { margin-top: 50px; max-width: 800px; margin-left: auto; margin-right: auto; background-color: white; min-height: calc(100vh - 50px); border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+        #main { margin-top: 50px; margin-left: 200px; max-width: 800px; margin-right: auto; background-color: white; min-height: calc(100vh - 50px); border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
         #main.search-open { margin-top: 95px; }
         #status-bar { background: #E1E8ED; padding: 6px 20px; font-size: 11px; color: #8899A6; border-bottom: 1px solid #E1E8ED; display: flex; justify-content: space-between; }
 
@@ -181,15 +181,16 @@
         <div class="feed-list" id="feed-list"></div>
     </div>
 
+    <div id="tagcloud">
+        <div class="tc-header">Themen <button class="tc-toggle" id="tc-toggle" onclick="toggleCloudCollapse()">&#9660;</button></div>
+        <div class="tc-tags" id="tc-tags"></div>
+        <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()">x</button></div>
+    </div>
+
     <div id="main">
         <div id="status-bar">
             <span id="tweet-count">0 Tweets</span>
             <span id="last-refresh">Nie aktualisiert</span>
-        </div>
-        <div id="tagcloud">
-            <div class="tc-header">Themen <button class="tc-toggle" id="tc-toggle" onclick="toggleCloudCollapse()">&#9660;</button></div>
-            <div class="tc-tags" id="tc-tags"></div>
-            <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()">Filter entfernen</button></div>
         </div>
         <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
     </div>
@@ -465,6 +466,7 @@ window.addEventListener('scroll',function(){if((window.innerHeight+window.scroll
 loadTimeline();
 loadHashtags();
 fetch('/api/timeline').then(function(r){return r.json();}).then(function(d){if(d.total===0)refreshTimeline(false);});
+setInterval(function(){refreshTimeline(false);},15*60*1000);
 </script>
 </body>
 </html>
