@@ -581,7 +581,7 @@ def get_hashtags():
             continue
         for tag in extract_hashtags(tweet.get('description', '') + ' ' + tweet.get('title', '')):
             tag_counts[tag] = tag_counts.get(tag, 0) + 1
-    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:50]
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     return jsonify({'hashtags': [{'tag': t, 'count': c} for t, c in sorted_tags]})
 
 

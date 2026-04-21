@@ -63,22 +63,27 @@
         .sidebar-overlay { position: fixed; top: 50px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 85; display: none; }
         .sidebar-overlay.open { display: block; }
 
-        /* --- Hashtag Cloud (left side) --- */
-        #tagcloud { position: fixed; top: 50px; left: 0; bottom: 0; width: 200px; background: #F5F8FA; border-right: 1px solid #E1E8ED; overflow-y: auto; padding: 12px 10px; z-index: 80; }
-        .tc-header { font-weight: bold; font-size: 13px; color: #5595BF; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .tc-toggle { background: none; border: none; font-size: 12px; cursor: pointer; color: #8899A6; }
-        .tc-toggle:hover { color: #5595BF; }
-        .tc-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
-        .tc-tag { background: white; color: #5595BF; padding: 3px 9px; border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; border: 1px solid #D6E4EF; transition: all 0.15s; display: inline-block; }
-        .tc-tag:hover { background: #5595BF; color: white; border-color: #5595BF; }
-        .tc-tag.active { background: #5595BF; color: white; border-color: #3B7BA8; }
-        .tc-filter-info { margin-top: 8px; padding: 5px 8px; background: #FFF3E0; color: #E65100; border-radius: 10px; font-size: 11px; display: none; align-items: center; justify-content: space-between; border: 1px solid #FFE0B2; }
-        .tc-filter-info.show { display: flex; }
-        .tc-filter-info button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 11px; }
+        /* --- Layout --- */
+        #layout { display: flex; margin-top: 50px; min-height: calc(100vh - 50px); }
+        #left-col { width: 260px; min-width: 260px; position: sticky; top: 50px; height: calc(100vh - 50px); padding: 15px; overflow-y: auto; }
+        #center-col { flex: 1; max-width: 800px; background-color: white; border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); min-height: calc(100vh - 50px); }
 
-        /* --- Main --- */
-        #main { margin-top: 50px; margin-left: 200px; max-width: 800px; margin-right: auto; background-color: white; min-height: calc(100vh - 50px); border-left: 1px solid #E1E8ED; border-right: 1px solid #E1E8ED; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
-        #main.search-open { margin-top: 95px; }
+        /* --- Trends (left) --- */
+        .trends-panel { background: #F5F8FA; border-radius: 12px; border: 1px solid #E1E8ED; overflow: hidden; }
+        .trends-title { padding: 12px 15px; font-weight: bold; font-size: 16px; color: #333; border-bottom: 1px solid #E1E8ED; }
+        .trend-item { padding: 10px 15px; border-bottom: 1px solid #E1E8ED; cursor: pointer; transition: background 0.1s; }
+        .trend-item:last-child { border-bottom: none; }
+        .trend-item:hover { background: #E8F0F8; }
+        .trend-item.active { background: #5595BF; }
+        .trend-item.active .trend-tag { color: white; }
+        .trend-item.active .trend-count { color: rgba(255,255,255,0.7); }
+        .trend-tag { font-weight: bold; font-size: 14px; color: #333; }
+        .trend-count { font-size: 11px; color: #8899A6; margin-top: 2px; }
+        .trend-filter { padding: 10px 15px; background: #FFF3E0; color: #E65100; font-size: 12px; display: none; align-items: center; justify-content: space-between; }
+        .trend-filter.show { display: flex; }
+        .trend-filter button { background: none; border: none; color: #E65100; cursor: pointer; font-weight: bold; font-size: 12px; }
+        .trends-empty { padding: 20px 15px; text-align: center; color: #8899A6; font-size: 13px; }
+
         #status-bar { background: #E1E8ED; padding: 6px 20px; font-size: 11px; color: #8899A6; border-bottom: 1px solid #E1E8ED; display: flex; justify-content: space-between; }
 
         /* --- Timeline --- */
@@ -187,16 +192,25 @@
         <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()">x</button></div>
     </div>
 
-    <div id="main">
-        <div id="status-bar">
-            <span id="tweet-count">0 Tweets</span>
-            <span id="last-refresh">Nie aktualisiert</span>
+    <div id="layout">
+        <div id="left-col">
+            <div class="trends-panel">
+                <div class="trends-title">Trends</div>
+                <div id="trends-list"></div>
+                <div class="trend-filter" id="trend-filter"><span id="trend-filter-label"></span><button onclick="clearTagFilter()">x</button></div>
+            </div>
         </div>
-        <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
+        <div id="center-col">
+            <div id="status-bar">
+                <span id="tweet-count">0 Tweets</span>
+                <span id="last-refresh">Nie aktualisiert</span>
+            </div>
+            <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
+        </div>
     </div>
 
 <script>
-var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,cloudCollapsed=false,activeTag='';
+var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,activeTag='';
 
 function toggleSidebar(){
     sidebarOpen=!sidebarOpen;
@@ -249,31 +263,23 @@ function doSearch(q){
 
 function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-function toggleCloudCollapse(){
-    cloudCollapsed=!cloudCollapsed;
-    document.getElementById('tc-tags').style.display=cloudCollapsed?'none':'flex';
-    document.getElementById('tc-filter-info').style.display=(cloudCollapsed||!activeTag)?'none':'flex';
-    document.getElementById('tc-toggle').innerHTML=cloudCollapsed?'&#9654;':'&#9660;';
-}
-
 function loadHashtags(){
     fetch('/api/hashtags').then(function(r){return r.json();}).then(function(data){
         var tags=data.hashtags||[];
-        var c=document.getElementById('tc-tags');
-        if(!tags.length){c.innerHTML='<span style="color:#8899A6;font-size:12px">Noch keine Themen.</span>';return;}
+        var c=document.getElementById('trends-list');
+        if(!tags.length){c.innerHTML='<div class="trends-empty">Noch keine Trends.</div>';return;}
         c.innerHTML=tags.map(function(t){
-            var sz=Math.min(10+Math.round(Math.log(t.count+1)*3),22);
-            var cls='tc-tag'+(activeTag===t.tag?' active':'');
-            return '<span class="'+cls+'" style="font-size:'+sz+'px" onclick="filterByTag(\''+esc(t.tag)+'\')">'+esc(t.tag)+'</span>';
+            var cls='trend-item'+(activeTag===t.tag?' active':'');
+            return '<div class="'+cls+'" onclick="filterByTag(\''+esc(t.tag)+'\')"><div class="trend-tag">'+esc(t.tag)+'</div><div class="trend-count">'+t.count+' Tweets</div></div>';
         }).join('');
-    }).catch(function(){document.getElementById('tc-tags').innerHTML='<span style="color:#cc0000;font-size:12px">Fehler</span>';});
+    }).catch(function(){document.getElementById('trends-list').innerHTML='<div class="trends-empty">Fehler</div>';});
 }
 
 function filterByTag(tag){
     if(activeTag===tag){clearTagFilter();return;}
     activeTag=tag;
-    document.getElementById('tc-filter-label').textContent=tag;
-    document.getElementById('tc-filter-info').classList.add('show');
+    document.getElementById('trend-filter-label').textContent=tag;
+    document.getElementById('trend-filter').classList.add('show');
     currentPage=1;
     loadTimeline();
     loadHashtags();
@@ -281,7 +287,7 @@ function filterByTag(tag){
 
 function clearTagFilter(){
     activeTag='';
-    document.getElementById('tc-filter-info').classList.remove('show');
+    document.getElementById('trend-filter').classList.remove('show');
     currentPage=1;
     loadTimeline();
     loadHashtags();
