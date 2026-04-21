@@ -143,10 +143,26 @@
         #status.show { display: block; }
         #status.error { background: #ffdddd; color: #cc0000; }
         #status.success { background: #ddffdd; color: #008000; }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
+            display: none;
+        }
+        #debug.show { display: block; }
     </style>
 </head>
 <body>
     <div id="status"></div>
+    <div id="debug"></div>
     <div id="container">
         <div id="header">Oldschool Twitter Timeline</div>
         <div id="feed-form">
@@ -165,6 +181,13 @@
             el.textContent = msg;
             el.className = 'show ' + type;
             setTimeout(() => el.className = '', 3000);
+        }
+
+        function showDebug(msg) {
+            const el = document.getElementById('debug');
+            el.textContent = msg;
+            el.className = 'show';
+            setTimeout(() => el.className = '', 5000);
         }
 
         async function loadFeeds() {
@@ -228,9 +251,15 @@
             try {
                 const res = await fetch('/api/timeline');
                 if (!res.ok) throw new Error('Server error');
-                const items = await res.json();
+                const data = await res.json();
+                showDebug(JSON.stringify(data, null, 2));
+                const items = data.items || [];
                 if (!items.length) {
-                    container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu.</div>';
+                    if (data.errors && data.errors.length) {
+                        container.innerHTML = '<div class="error"><b>Feed-Fehler:</b><br>' + data.errors.map(e => e.url + ': ' + e.error).join('<br>') + '</div>';
+                    } else {
+                        container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Füge einen RSS-Feed hinzu.</div>';
+                    }
                     return;
                 }
                 container.innerHTML = items.map(item => {

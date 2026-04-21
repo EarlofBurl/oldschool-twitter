@@ -3,7 +3,6 @@ import os
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import feedparser
-from urllib.parse import unquote, quote
 
 app = Flask(__name__)
 FEEDS_FILE = 'feeds.json'
@@ -32,10 +31,8 @@ def parse_date(date_str):
 
 def fetch_feed_items(url):
     try:
-        feed = feedparser.parse(url, timeout=10)
+        feed = feedparser.parse(url, timeout=15)
         items = []
-        if not feed.entries:
-            return items
         for entry in feed.entries:
             date_str = entry.get('published', '')
             timestamp = parse_date(date_str).timestamp()
@@ -103,11 +100,35 @@ def remove_feed():
 def get_timeline():
     feeds = load_feeds()
     all_items = []
+    errors = []
     for feed_url in feeds:
         items = fetch_feed_items(feed_url)
+        if not items:
+            errors.append({'url': feed_url, 'error': 'No items or fetch failed'})
         all_items.extend(items)
     all_items.sort(key=lambda x: x['timestamp'], reverse=True)
-    return jsonify(all_items[:50])
+    return jsonify({
+        'items': all_items[:50],
+        'feeds_count': len(feeds),
+        'errors': errors
+    })
+
+
+@app.route('/api/test-feed')
+def test_feed():
+    url = request.args.get('url', 'https://nitter.privacyredirect.com/BeckyLynchWWE/rss')
+    try:
+        feed = feedparser.parse(url, timeout=15)
+        return jsonify({
+            'url': url,
+            'entries_count': len(feed.entries),
+            'feed_title': feed.feed.get('title', 'N/A'),
+            'first_entry': feed.entries[0].get('title', 'N/A') if feed.entries else 'None',
+            'bozo': feed.bozo,
+            'bozo_exception': str(feed.bozo_exception) if feed.bozo else None
+        })
+    except Exception as e:
+        return jsonify({'url': url, 'error': str(e)})
 
 
 @app.route('/health')
