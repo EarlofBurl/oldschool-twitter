@@ -38,13 +38,16 @@
             background: rgba(255,255,255,0.2);
             border: 1px solid rgba(255,255,255,0.4);
             color: white;
-            padding: 4px 10px;
+            padding: 6px 12px;
             border-radius: 3px;
             font-size: 12px;
             cursor: pointer;
+            white-space: nowrap;
         }
         #refresh-btn:hover { background: rgba(255,255,255,0.3); }
         #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spinning { animation: spin 1s linear infinite; display: inline-block; }
         #feed-form {
             background-color: #F5F8FA;
             padding: 12px 15px;
@@ -73,7 +76,7 @@
         }
         #feed-form button:hover { background-color: #3B7BA8; }
         #feeds-list {
-            padding: 8px 15px 8px;
+            padding: 8px 15px;
             font-size: 12px;
             border-bottom: 1px solid #E1E8ED;
             background: #F5F8FA;
@@ -91,6 +94,15 @@
         #feeds-list .feed-tag:hover {
             background-color: #5595BF;
             color: white;
+        }
+        #status-bar {
+            background: #E1E8ED;
+            padding: 6px 15px;
+            font-size: 11px;
+            color: #8899A6;
+            border-bottom: 1px solid #E1E8ED;
+            display: flex;
+            justify-content: space-between;
         }
         .timeline { background-color: white; }
         .tweet {
@@ -154,23 +166,6 @@
         .loading { text-align: center; padding: 30px; color: #8899A6; }
         .empty-state { text-align: center; padding: 40px 20px; color: #8899A6; }
         .empty-state h3 { margin-bottom: 8px; color: #333; }
-        .error-banner {
-            background: #FFEBEE;
-            color: #C62828;
-            padding: 8px 15px;
-            font-size: 12px;
-            border-bottom: 1px solid #E1E8ED;
-        }
-        .error-banner a { color: #C62828; text-decoration: underline; }
-        #load-more {
-            text-align: center;
-            padding: 15px;
-            color: #5595BF;
-            font-size: 14px;
-            cursor: pointer;
-            border-bottom: 1px solid #E1E8ED;
-        }
-        #load-more:hover { background-color: #F5F8FA; }
         #toast {
             position: fixed;
             top: 10px;
@@ -185,15 +180,6 @@
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
         #toast.success { background: #C8E6C9; color: #2E7D32; }
-        #status-bar {
-            background: #E1E8ED;
-            padding: 6px 15px;
-            font-size: 11px;
-            color: #8899A6;
-            border-bottom: 1px solid #E1E8ED;
-            display: flex;
-            justify-content: space-between;
-        }
     </style>
 </head>
 <body>
@@ -209,26 +195,24 @@
         </div>
         <div id="feeds-list"></div>
         <div id="status-bar">
-            <span id="tweet-count">0 Tweets</span>
+            <span id="tweet-count">0 Tweets geladen</span>
             <span id="last-refresh">Nie aktualisiert</span>
         </div>
-        <div id="errors"></div>
         <div class="timeline" id="timeline">
             <div class="loading">Lade Timeline...</div>
         </div>
-        <div id="load-more" style="display:none;">Weitere Tweets laden...</div>
     </div>
 
     <script>
         let currentPage = 1;
         let loading = false;
-        let hasMore = true;
+        let hasMore = false;
 
         function showToast(msg, type) {
             const el = document.getElementById('toast');
             el.textContent = msg;
             el.className = 'show ' + type;
-            setTimeout(() => el.className = '', 3000);
+            setTimeout(() => el.className = '', 4000);
         }
 
         async function loadFeeds() {
@@ -262,8 +246,7 @@
                 });
                 if (!res.ok) throw new Error('Server error');
                 input.value = '';
-                showToast('Feed hinzugefügt!', 'success');
-                await loadFeeds();
+                showToast('Feed hinzugefügt! Aktualisiere...', 'success');
                 await refreshTimeline();
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
@@ -280,7 +263,6 @@
                 });
                 showToast('Feed entfernt!', 'success');
                 await loadFeeds();
-                await refreshTimeline();
             } catch (e) {
                 showToast('Fehler: ' + e.message, 'error');
             }
@@ -289,20 +271,26 @@
         async function refreshTimeline() {
             const btn = document.getElementById('refresh-btn');
             btn.disabled = true;
-            btn.textContent = '&#8635; Lade...';
+            btn.innerHTML = '<span class="spinning">&#8635;</span> Lade...';
             try {
                 const res = await fetch('/api/refresh', {method: 'POST'});
                 const data = await res.json();
-                showToast(`${data.new_tweets} neue Tweets (${data.total} gesamt)`, 'success');
+                const msg = data.new_tweets > 0
+                    ? `${data.new_tweets} neue Tweets! (${data.total} gesamt)`
+                    : `Keine neuen Tweets (${data.total} gesamt)`;
+                showToast(msg, data.new_tweets > 0 ? 'success' : 'success');
+                if (data.errors && data.errors.length > 0) {
+                    const errMsg = data.errors.map(e => e.error).join(', ');
+                    setTimeout(() => showToast('Feed-Fehler: ' + errMsg, 'error'), 500);
+                }
                 document.getElementById('last-refresh').textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
                 currentPage = 1;
-                hasMore = true;
                 await loadTimeline();
             } catch (e) {
-                showToast('Fehler beim Aktualisieren', 'error');
+                showToast('Fehler beim Aktualisieren: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.textContent = '↻ Aktualisieren';
+                btn.innerHTML = '&#8635; Aktualisieren';
             }
         }
 
@@ -323,11 +311,10 @@
                 const items = data.items || [];
                 hasMore = data.has_more;
 
-                document.getElementById('tweet-count').textContent = `${data.total} Tweets`;
+                document.getElementById('tweet-count').textContent = `${data.total} Tweets geladen`;
 
                 if (!items.length && !append) {
                     container.innerHTML = '<div class="empty-state"><h3>Keine Tweets</h3>Klicke "Aktualisieren" um Tweets zu laden.</div>';
-                    document.getElementById('load-more').style.display = 'none';
                     loading = false;
                     return;
                 }
@@ -336,10 +323,9 @@
                 if (!append) {
                     container.innerHTML = html;
                 } else {
-                    container.insertAdjacentHTML('beforeend', html);
+                    container.insertAdjacentHTML('beforeend',
+                        '<div style="border-top:2px solid #5595BF;margin:5px 15px;"></div>' + html);
                 }
-
-                document.getElementById('load-more').style.display = hasMore ? 'block' : 'none';
             } catch (e) {
                 if (!append) {
                     container.innerHTML = '<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>' + e.message + '</div>';
@@ -359,7 +345,7 @@
 
             let avatarHtml;
             if (profileSrc) {
-                avatarHtml = `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="tweet-avatar" style="display:none;background:#5595BF;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
+                avatarHtml = `<img class="tweet-avatar" src="${profileSrc}" alt="${username}" onerror="this.outerHTML='<div class=\\'tweet-avatar\\' style=\\'background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px\\'>${username.charAt(0).toUpperCase()}</div>'">`;
             } else {
                 avatarHtml = `<div class="tweet-avatar" style="background:#5595BF;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px">${username.charAt(0).toUpperCase()}</div>`;
             }
@@ -387,9 +373,8 @@
             loadTimeline(true);
         }
 
-        // Infinite scroll
         window.addEventListener('scroll', () => {
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200) {
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300) {
                 loadMore();
             }
         });
@@ -399,10 +384,13 @@
         document.getElementById('feed-url').addEventListener('keypress', e => {
             if (e.key === 'Enter') addFeed();
         });
-        document.getElementById('load-more').addEventListener('click', loadMore);
 
         loadFeeds();
         loadTimeline();
+        // Auto-refresh on first load if empty
+        fetch('/api/timeline').then(r => r.json()).then(data => {
+            if (data.total === 0) refreshTimeline();
+        });
     </script>
 </body>
 </html>

@@ -11,7 +11,7 @@ import requests
 from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
-DATA_DIR = 'data'
+DATA_DIR = '/app/data'
 FEEDS_FILE = os.path.join(DATA_DIR, 'feeds.json')
 TWEETS_FILE = os.path.join(DATA_DIR, 'tweets.json')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
@@ -19,6 +19,14 @@ COOKIE_CACHE = {}
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(IMAGES_DIR, exist_ok=True)
+
+if not os.path.exists(FEEDS_FILE):
+    with open(FEEDS_FILE, 'w') as f:
+        json.dump([], f)
+
+if not os.path.exists(TWEETS_FILE):
+    with open(TWEETS_FILE, 'w') as f:
+        json.dump({}, f)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,10 +40,8 @@ REQUEST_HEADERS = {
 
 
 def load_feeds():
-    if os.path.exists(FEEDS_FILE):
-        with open(FEEDS_FILE, 'r') as f:
-            return json.load(f)
-    return []
+    with open(FEEDS_FILE, 'r') as f:
+        return json.load(f)
 
 
 def save_feeds(feeds):
@@ -44,10 +50,8 @@ def save_feeds(feeds):
 
 
 def load_tweets():
-    if os.path.exists(TWEETS_FILE):
-        with open(TWEETS_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+    with open(TWEETS_FILE, 'r') as f:
+        return json.load(f)
 
 
 def save_tweets(tweets):
@@ -170,7 +174,7 @@ def download_image(url):
         return f"/images/{filename}"
     try:
         resp, session = fetch_with_anubis(url)
-        if resp.status_code == 200 and not resp.text.startswith('<'):
+        if resp.status_code == 200 and len(resp.content) > 100 and not resp.text.startswith('<'):
             with open(filepath, 'wb') as f:
                 f.write(resp.content)
             return f"/images/{filename}"
@@ -197,12 +201,12 @@ def fetch_feed_items(url):
 
         if '<html' in resp.text[:500].lower():
             logger.error(f"Got HTML instead of RSS for {url}")
-            return []
+            return [], 'Got HTML instead of RSS (bot protection)'
 
         feed = feedparser.parse(resp.text)
         if not feed.entries:
             logger.warning(f"No entries in feed for {url}")
-            return []
+            return [], 'No entries found in feed'
 
         items = []
         for entry in feed.entries:
@@ -239,19 +243,22 @@ def fetch_feed_items(url):
                 'rt_creator': rt_creator,
             })
         logger.info(f"Fetched {len(items)} items from {url}")
-        return items
+        return items, None
     except Exception as e:
         logger.error(f"Error fetching {url}: {e}")
-        return []
+        return [], str(e)
 
 
 def refresh_and_cache():
     feeds = load_feeds()
     tweets = load_tweets()
-    all_new = []
+    new_count = 0
+    errors = []
 
     for feed_url in feeds:
-        items = fetch_feed_items(feed_url)
+        items, error = fetch_feed_items(feed_url)
+        if error:
+            errors.append({'url': feed_url, 'error': error})
         for item in items:
             tweet_id = item.get('link', '')
             if not tweet_id or tweet_id in tweets:
@@ -275,11 +282,11 @@ def refresh_and_cache():
                 'is_retweet': item.get('is_retweet', False),
                 'rt_creator': item.get('rt_creator', ''),
             }
-            all_new.append(tweet_id)
+            new_count += 1
 
     save_tweets(tweets)
-    logger.info(f"Cached {len(all_new)} new tweets, total {len(tweets)}")
-    return len(all_new)
+    logger.info(f"Cached {new_count} new tweets, total {len(tweets)}")
+    return new_count, len(tweets), errors
 
 
 @app.route('/')
@@ -324,8 +331,11 @@ def remove_feed():
 
 @app.route('/api/refresh', methods=['POST'])
 def refresh():
-    new_count = refresh_and_cache()
-    return jsonify({'new_tweets': new_count, 'total': len(load_tweets())})
+    new_count, total, errors = refresh_and_cache()
+    result = {'new_tweets': new_count, 'total': total}
+    if errors:
+        result['errors'] = errors
+    return jsonify(result)
 
 
 @app.route('/api/timeline', methods=['GET'])
@@ -352,9 +362,11 @@ def get_timeline():
 @app.route('/health')
 def health():
     tweets = load_tweets()
+    feeds = load_feeds()
     return jsonify({
         'status': 'ok',
         'total_tweets': len(tweets),
+        'total_feeds': len(feeds),
         'cookie_cache': {k: {'expires': v['expires']} for k, v in COOKIE_CACHE.items()}
     })
 
