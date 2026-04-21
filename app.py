@@ -31,8 +31,15 @@ def parse_date(date_str):
 
 def fetch_feed_items(url):
     try:
-        feed = feedparser.parse(url, timeout=15)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        feed = feedparser.parse(url, timeout=15, headers=headers)
         items = []
+        if feed.bozo and not feed.entries:
+            return []
         for entry in feed.entries:
             date_str = entry.get('published', '')
             timestamp = parse_date(date_str).timestamp()
@@ -118,14 +125,18 @@ def get_timeline():
 def test_feed():
     url = request.args.get('url', 'https://nitter.privacyredirect.com/BeckyLynchWWE/rss')
     try:
-        feed = feedparser.parse(url, timeout=15)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        }
+        feed = feedparser.parse(url, timeout=15, headers=headers)
         return jsonify({
             'url': url,
             'entries_count': len(feed.entries),
             'feed_title': feed.feed.get('title', 'N/A'),
-            'first_entry': feed.entries[0].get('title', 'N/A') if feed.entries else 'None',
             'bozo': feed.bozo,
-            'bozo_exception': str(feed.bozo_exception) if feed.bozo else None
+            'bozo_exception': str(feed.bozo_exception) if feed.bozo else None,
+            'first_entry': feed.entries[0].get('title', 'N/A') if feed.entries else 'None',
         })
     except Exception as e:
         return jsonify({'url': url, 'error': str(e)})
