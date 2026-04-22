@@ -146,6 +146,20 @@
         #toast.show { display: block; }
         #toast.error { background: #FFCDD2; color: #C62828; }
         #toast.success { background: #C8E6C9; color: #2E7D32; }
+
+        /* --- Scroll-to-top --- */
+        #scroll-top { position: fixed; bottom: 20px; right: 20px; width: 42px; height: 42px; background: #5595BF; color: white; border: none; border-radius: 50%; font-size: 22px; cursor: pointer; display: none; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.25); z-index: 300; }
+        #scroll-top:hover { background: #3B7BA8; }
+        #scroll-top.show { display: flex; }
+
+        /* --- Tweet read state --- */
+        .tweet.read { opacity: 0.55; }
+        .tweet.unread { border-left: 3px solid #5595BF; }
+        .tweet.unread.new-arrival { animation: flashNew 1s ease-out; }
+        @keyframes flashNew { 0% { background-color: #E8F4FD; } 100% { background-color: white; } }
+
+        /* --- Unread filter --- */
+        .unread-count-badge { background: #C62828; color: white; padding: 1px 5px; border-radius: 8px; font-size: 10px; margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -188,12 +202,6 @@
         <div class="feed-list" id="feed-list"></div>
     </div>
 
-    <div id="tagcloud">
-        <div class="tc-header">Themen <button class="tc-toggle" id="tc-toggle" onclick="toggleCloudCollapse()">&#9660;</button></div>
-        <div class="tc-tags" id="tc-tags"></div>
-        <div class="tc-filter-info" id="tc-filter-info"><span id="tc-filter-label"></span><button onclick="clearTagFilter()">x</button></div>
-    </div>
-
     <div id="layout">
         <div id="left-col">
             <div class="trends-panel">
@@ -206,14 +214,20 @@
             <div id="status-bar">
                 <span id="tweet-count">0 Tweets</span>
                 <span id="last-refresh">Nie aktualisiert</span>
+                <span id="unread-filter" style="display:none;cursor:pointer" onclick="toggleUnreadFilter()">
+                    <span id="unread-label">Nur ungelesene</span>
+                    <span class="unread-count-badge" id="unread-badge"></span>
+                </span>
             </div>
             <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
         </div>
         <div id="right-spacer"></div>
     </div>
 
+    <button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#8679;</button>
+
 <script>
-var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,activeTag='';
+var currentPage=1,loading=false,hasMore=false,sidebarOpen=false,searchOpen=false,searchTO=null,lbImgs=[],lbIdx=0,activeTag='',showOnlyUnread=false,readTweets=new Set(),knownTweetLinks=new Set();
 
 function toggleSidebar(){
     sidebarOpen=!sidebarOpen;
@@ -476,11 +490,87 @@ function lbNav(d){lbIdx=(lbIdx+d+lbImgs.length)%lbImgs.length;showLB();}
 function showLB(){document.getElementById('lb-img').src=lbImgs[lbIdx];document.getElementById('lb-counter').textContent=(lbIdx+1)+' / '+lbImgs.length;}
 function lbKey(e){if(e.key==='Escape')closeLightbox();else if(e.key==='ArrowLeft')lbNav(-1);else if(e.key==='ArrowRight')lbNav(1);}
 
-window.addEventListener('scroll',function(){if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300&&!hasMore||loading)return;if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){currentPage++;loadTimeline(true);}});
+function toggleUnreadFilter(){
+    showOnlyUnread=!showOnlyUnread;
+    document.getElementById('unread-label').textContent=showOnlyUnread?'Alle anzeigen':'Nur ungelesene';
+    applyUnreadFilter();
+}
+
+function applyUnreadFilter(){
+    var tweets=document.querySelectorAll('.tweet');
+    tweets.forEach(function(t){
+        var link=t.querySelector('a[href*="nitter"]');
+        if(!link)return;
+        var isRead=readTweets.has(link.href);
+        if(showOnlyUnread){
+            t.style.display=isRead?'none':'block';
+        } else {
+            t.style.display='block';
+        }
+    });
+    var visible=document.querySelectorAll('.tweet[style="display:none"]');
+    document.getElementById('tweet-count').textContent=(tweets.length-visible.length)+' Tweets';
+}
+
+function markVisibleTweetsRead(){
+    var tweets=document.querySelectorAll('.timeline .tweet');
+    var viewportBottom=window.scrollY+window.innerHeight;
+    var newUnread=[];
+    tweets.forEach(function(t){
+        var link=t.querySelector('a[href*="nitter"]');
+        if(!link)return;
+        var rect=t.getBoundingClientRect();
+        var elemTop=rect.top+window.scrollY;
+        if(elemTop>viewportBottom)return;
+        if(!readTweets.has(link.href)){
+            readTweets.add(link.href);
+            t.classList.add('read');
+            t.classList.remove('unread');
+            newUnread.push(link.href);
+        }
+    });
+    if(newUnread.length>0){
+        fetch('/api/readstate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mark_read:newUnread})}).catch(function(){});
+    }
+    updateUnreadBadge();
+}
+
+function updateUnreadBadge(){
+    fetch('/api/readstate').then(function(r){return r.json();}).then(function(data){
+        var readSet=new Set(data.read_tweets||[]);
+        var tweets=document.querySelectorAll('.timeline .tweet');
+        var unreadCount=0;
+        tweets.forEach(function(t){
+            var link=t.querySelector('a[href*="nitter"]');
+            if(!link)return;
+            if(!readSet.has(link.href))unreadCount++;
+        });
+        var badge=document.getElementById('unread-badge');
+        var filterEl=document.getElementById('unread-filter');
+        if(unreadCount>0){
+            badge.textContent=unreadCount;
+            filterEl.style.display='inline';
+        } else {
+            filterEl.style.display='none';
+        }
+    }).catch(function(){});
+}
+
+window.addEventListener('scroll',function(){
+    var st=document.getElementById('scroll-top');
+    st.classList.toggle('show',window.scrollY>400);
+    markVisibleTweetsRead();
+    if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300&&!hasMore||loading)return;
+    if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){currentPage++;loadTimeline(true);}
+});
 
 loadTimeline();
 loadHashtags();
 fetch('/api/timeline').then(function(r){return r.json();}).then(function(d){if(d.total===0)refreshTimeline(false);});
+fetch('/api/readstate').then(function(r){return r.json();}).then(function(data){
+    readTweets=new Set(data.read_tweets||[]);
+    updateUnreadBadge();
+});
 setInterval(function(){refreshTimeline(false);},15*60*1000);
 </script>
 </body>

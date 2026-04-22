@@ -4,6 +4,7 @@ import re
 import hashlib
 import time
 import logging
+import threading
 from datetime import datetime
 from urllib.parse import quote, urlparse, urljoin
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
@@ -20,6 +21,7 @@ TWEETS_FILE = os.path.join(DATA_DIR, 'tweets.json')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 CACHE_FILE = os.path.join(DATA_DIR, 'cache_meta.json')
 USERS_FILE = os.path.join(DATA_DIR, 'users.json')
+READSTATE_FILE = os.path.join(DATA_DIR, 'readstate.json')
 COOKIE_CACHE = {}
 MIN_REFRESH_INTERVAL = 600
 
@@ -38,6 +40,9 @@ if not os.path.exists(CACHE_FILE):
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, 'w') as f:
         json.dump({'manuel': generate_password_hash('wrestlemania!2026')}, f)
+if not os.path.exists(READSTATE_FILE):
+    with open(READSTATE_FILE, 'w') as f:
+        json.dump({}, f)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -100,6 +105,14 @@ def save_users(users):
     save_json(USERS_FILE, users)
 
 
+def load_readstate():
+    return load_json(READSTATE_FILE, {})
+
+
+def save_readstate(data):
+    save_json(READSTATE_FILE, data)
+
+
 def login_required(f):
     from functools import wraps
     @wraps(f)
@@ -134,6 +147,31 @@ def api_login():
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
     session.pop('user', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/readstate', methods=['GET'])
+@login_required
+def get_readstate():
+    username = session.get('user', '')
+    rs = load_readstate()
+    user_data = rs.get(username, {})
+    return jsonify({'read_tweets': user_data.get('read_tweets', [])})
+
+
+@app.route('/api/readstate', methods=['POST'])
+@login_required
+def update_readstate():
+    username = session.get('user', '')
+    data = request.get_json() or {}
+    rs = load_readstate()
+    if username not in rs:
+        rs[username] = {'read_tweets': []}
+    existing = set(rs[username]['read_tweets'])
+    for tweet_link in data.get('mark_read', []):
+        existing.add(tweet_link)
+    rs[username]['read_tweets'] = list(existing)
+    save_readstate(rs)
     return jsonify({'success': True})
 
 
@@ -906,5 +944,23 @@ def health():
     })
 
 
+_background_refresh_thread = None
+
+
+def start_background_refresh():
+    def run():
+        while True:
+            time.sleep(15 * 60)
+            logging.info("Background refresh triggered")
+            try:
+                refresh_and_cache()
+            except Exception as e:
+                logging.error(f"Background refresh failed: {e}")
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    logging.info("Background refresh thread started")
+
+
 if __name__ == '__main__':
+    start_background_refresh()
     app.run(host='0.0.0.0', port=5000, threaded=True)
