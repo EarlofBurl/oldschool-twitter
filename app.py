@@ -165,12 +165,7 @@ def update_readstate():
     username = session.get('user', '')
     data = request.get_json() or {}
     rs = load_readstate()
-    if username not in rs:
-        rs[username] = {'read_tweets': []}
-    existing = set(rs[username]['read_tweets'])
-    for tweet_link in data.get('mark_read', []):
-        existing.add(tweet_link)
-    rs[username]['read_tweets'] = list(existing)
+    rs[username] = {'read_tweets': list(set(data.get('mark_read', [])))}
     save_readstate(rs)
     return jsonify({'success': True})
 
