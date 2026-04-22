@@ -460,7 +460,7 @@ function renderTweet(item){
         +'<span class="tweet-user" onclick="goProfile(\''+esc(feedLink)+'\')">'+esc(username)+'</span>'
         +'<span class="tweet-username">'+esc(creator)+'</span>'
         +'<span class="tweet-time">'+date+'</span>'
-        +'<button class="tweet-read-btn" id="readbtn-'+esc(tid)+'" onclick="toggleRead(\''+esc(item.link)+'\',\''+esc(tid)+'\')" title="Gelesen/ Ungelesen">&#128231;</button>'
+        +'<button class="tweet-read-btn unread" onclick="toggleRead(\''+esc(item.link)+'\')" title="Gelesen/ Ungelesen">&#128228;</button>'
         +'</div>'
         +'<div class="tweet-body">'+textOnly+'</div>'
         +gallerySection
@@ -516,36 +516,56 @@ function applyUnreadFilter(){
     });
 }
 
-function toggleRead(link,tid){
-    if(readTweets.has(link)){
-        readTweets.delete(link);
-        var btn=document.getElementById('readbtn-'+tid);
-        if(btn)btn.classList.remove('unread');
-    } else {
-        readTweets.add(link);
-        var btn=document.getElementById('readbtn-'+tid);
-        if(btn)btn.classList.add('unread');
-    }
-    fetch('/api/readstate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mark_read:Array.from(readTweets)})}).catch(function(){});
-}
-
 function updateReadButtons(){
-    readTweets.forEach(function(link){
-        var btn=document.querySelector('.tweet a[href="'+link+'"]');
-        if(btn){
-            var tweetEl=btn.closest('.tweet');
-            if(tweetEl){
-                var tid=link.split('/').pop()||Math.random().toString(36).substr(2,9);
-                var readBtn=document.getElementById('readbtn-'+tid);
-                if(readBtn)readBtn.classList.add('unread');
-            }
+    document.querySelectorAll('.tweet').forEach(function(t){
+        var link=t.querySelector('a[href*="nitter"]');
+        if(!link)return;
+        var tid=t.querySelector('.tweet-read-btn');
+        if(!tid)return;
+        if(readTweets.has(link.href)){
+            tid.innerHTML='&#128236;';
+            tid.classList.remove('unread');
+        } else {
+            tid.innerHTML='&#128228;';
+            tid.classList.add('unread');
         }
     });
+}
+
+function markVisibleTweetsRead(){
+    var viewportBottom=window.scrollY+window.innerHeight;
+    var changed=false;
+    document.querySelectorAll('.timeline .tweet').forEach(function(t){
+        var link=t.querySelector('a[href*="nitter"]');
+        if(!link)return;
+        var rect=t.getBoundingClientRect();
+        var elemTop=rect.top+window.scrollY;
+        if(elemTop>viewportBottom)return;
+        if(!readTweets.has(link.href)){
+            readTweets.add(link.href);
+            changed=true;
+        }
+    });
+    if(changed){
+        updateReadButtons();
+        fetch('/api/readstate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mark_read:Array.from(readTweets)})}).catch(function(){});
+    }
+}
+
+function toggleRead(link){
+    if(readTweets.has(link)){
+        readTweets.delete(link);
+    } else {
+        readTweets.add(link);
+    }
+    updateReadButtons();
+    fetch('/api/readstate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mark_read:Array.from(readTweets)})}).catch(function(){});
 }
 
 window.addEventListener('scroll',function(){
     var st=document.getElementById('scroll-top');
     st.classList.toggle('show',window.scrollY>400);
+    markVisibleTweetsRead();
     if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300&&!hasMore||loading)return;
     if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-300){currentPage++;loadTimeline(true);}
 });
