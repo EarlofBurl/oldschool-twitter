@@ -148,9 +148,11 @@
         #toast.success { background: #C8E6C9; color: #2E7D32; }
 
         /* --- Unread filter --- */
-        .unread-toggle { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 5px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; margin-left: 6px; white-space: nowrap; }
+        #unread-toggle-wrap { position: sticky; top: 56px; z-index: 90; background: #5595BF; padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
+        .unread-toggle { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 5px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; white-space: nowrap; }
         .unread-toggle:hover { background: rgba(255,255,255,0.3); }
         .unread-toggle.active { background: rgba(255,255,255,0.35); }
+        #unread-count { background: rgba(255,255,255,0.25); border-radius: 10px; padding: 2px 8px; font-size: 11px; font-weight: bold; color: white; }
 
         /* --- Tweet read state --- */
         .tweet-read-btn { background: none; border: none; font-size: 16px; cursor: pointer; margin-left: 6px; color: #8899A6; padding: 2px; vertical-align: middle; }
@@ -212,10 +214,13 @@
             </div>
         </div>
         <div id="center-col">
+            <div id="unread-toggle-wrap">
+                <button class="unread-toggle" id="unread-toggle" onclick="toggleUnreadFilter()">&#128231; <span id="unread-label">Ungelesene</span></button>
+                <span id="unread-count"></span>
+            </div>
             <div id="status-bar">
                 <span id="tweet-count">0 Tweets</span>
                 <span id="last-refresh">Nie aktualisiert</span>
-                <button class="unread-toggle" id="unread-toggle" onclick="toggleUnreadFilter()">&#128231; Ungelesene</button>
             </div>
             <div class="timeline" id="timeline"><div class="loading">Lade Timeline...</div></div>
         </div>
@@ -386,6 +391,8 @@ async function loadTimeline(append){
         var html=items.map(renderTweet).join('');
         if(!append) c.innerHTML=html;
         else c.insertAdjacentHTML('beforeend',html);
+        if(showOnlyUnread) applyUnreadFilter();
+        updateUnreadCount();
     }catch(e){if(!append) c.innerHTML='<div class="empty-state" style="color:#cc0000"><h3>Fehler</h3>'+e.message+'</div>';}
     finally{loading=false;}
 }
@@ -516,6 +523,37 @@ function applyUnreadFilter(){
     });
 }
 
+function updateUnreadCount(){
+    var all=document.querySelectorAll('.tweet');
+    var total=all.length;
+    var read=0;
+    all.forEach(function(t){
+        var link=t.querySelector('a[href*="nitter"]');
+        if(!link)return;
+        if(readTweets.has(link.href))read++;
+    });
+    var unread=total-read;
+    var countEl=document.getElementById('unread-count');
+    var labelEl=document.getElementById('unread-label');
+    if(countEl) countEl.textContent=unread>0?unread:'';
+    if(labelEl){
+        if(showOnlyUnread) labelEl.textContent='Alle anzeigen';
+        else labelEl.textContent='Ungelesene';
+    }
+}
+
+function toggleUnreadFilter(){
+    showOnlyUnread=!showOnlyUnread;
+    var btn=document.getElementById('unread-toggle');
+    if(showOnlyUnread){
+        btn.classList.add('active');
+    } else {
+        btn.classList.remove('active');
+    }
+    applyUnreadFilter();
+    updateUnreadCount();
+}
+
 function updateReadButtons(){
     document.querySelectorAll('.tweet').forEach(function(t){
         var link=t.querySelector('a[href*="nitter"]');
@@ -530,6 +568,7 @@ function updateReadButtons(){
             tid.classList.add('unread');
         }
     });
+    updateUnreadCount();
 }
 
 function markVisibleTweetsRead(){
