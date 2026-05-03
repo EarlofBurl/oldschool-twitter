@@ -363,7 +363,9 @@ async function refreshTimeline(force){
     var hbtn=document.querySelector('[onclick="refreshTimeline(true)"]');
     btn.disabled=true;hbtn.disabled=true;btn.innerHTML='<span class="spinning">&#8635;</span> Lade...';
     try{
-        var data=await(await fetch('/api/refresh'+(force?'?force=1':''),{method:'POST'})).json();
+        var res=await fetch('/api/refresh'+(force?'?force=1':''),{method:'POST'});
+        var data=await res.json();
+        if(res.status===500){showToast('Server-Fehler: '+(data.error||'Unbekannt'),'error');return;}
         showToast(data.new_tweets>0?data.new_tweets+' neue Tweets! ('+data.total+' gesamt)':'Keine neuen Tweets ('+data.total+' gesamt)','success');
         if(data.errors&&data.errors.length) setTimeout(function(){showToast('Feed-Fehler: '+data.errors.map(function(e){return e.error;}).join(', '),'error');},600);
         document.getElementById('last-refresh').textContent='Aktualisiert: '+new Date().toLocaleTimeString('de-DE');

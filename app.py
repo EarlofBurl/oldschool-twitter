@@ -62,9 +62,12 @@ REQUEST_HEADERS = {
 
 
 def load_json(path, default):
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
+    try:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.error(f"Error loading {path}: {e}")
     return default
 
 
@@ -864,17 +867,21 @@ def remove_feed():
 @app.route('/api/refresh', methods=['POST'])
 @login_required
 def refresh():
-    force = request.args.get('force', '0') == '1'
-    if force:
-        cache_meta = load_cache_meta()
-        for key in cache_meta:
-            cache_meta[key]['last_refresh'] = 0
-        save_cache_meta(cache_meta)
-    new_count, total, errors = refresh_and_cache()
-    result = {'new_tweets': new_count, 'total': total}
-    if errors:
-        result['errors'] = errors
-    return jsonify(result)
+    try:
+        force = request.args.get('force', '0') == '1'
+        if force:
+            cache_meta = load_cache_meta()
+            for key in cache_meta:
+                cache_meta[key]['last_refresh'] = 0
+            save_cache_meta(cache_meta)
+        new_count, total, errors = refresh_and_cache()
+        result = {'new_tweets': new_count, 'total': total}
+        if errors:
+            result['errors'] = errors
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Refresh endpoint error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/timeline', methods=['GET'])
