@@ -72,8 +72,10 @@ def load_json(path, default):
 
 
 def save_json(path, data):
-    with open(path, 'w') as f:
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 def load_feeds():
@@ -606,19 +608,24 @@ def process_description_images(description, feed_url=None):
 
 
 def refresh_and_cache():
-    feeds = load_feeds()
-    tweets = load_tweets()
-    cache_meta = load_cache_meta()
+    try:
+        feeds = load_feeds()
+        tweets = load_tweets()
+        cache_meta = load_cache_meta()
+    except Exception as e:
+        logger.error(f"Error loading data files: {e}", exc_info=True)
+        return 0, 0, [{'url': 'local', 'error': f'Data load error: {str(e)}'}]
+
     new_count = 0
     errors = []
 
     for feed_url in feeds:
-        last_refresh = cache_meta.get(feed_url, {}).get('last_refresh', 0)
-        if time.time() - last_refresh < MIN_REFRESH_INTERVAL:
-            logger.info(f"Skipping {feed_url} - refreshed {(time.time() - last_refresh):.0f}s ago")
-            continue
-
         try:
+            last_refresh = cache_meta.get(feed_url, {}).get('last_refresh', 0)
+            if time.time() - last_refresh < MIN_REFRESH_INTERVAL:
+                logger.info(f"Skipping {feed_url} - refreshed {(time.time() - last_refresh):.0f}s ago")
+                continue
+
             if is_rss_url(feed_url):
                 items, profile_image = fetch_rss_feed(feed_url)
             else:
@@ -629,6 +636,7 @@ def refresh_and_cache():
                     errors.append({'url': feed_url, 'error': 'Blocked or request failed'})
                 else:
                     errors.append({'url': feed_url, 'error': 'No items found'})
+                cache_meta[feed_url] = {'last_refresh': time.time()}
                 continue
 
             for item in items:
@@ -660,11 +668,16 @@ def refresh_and_cache():
 
             cache_meta[feed_url] = {'last_refresh': time.time()}
         except Exception as e:
-            logger.error(f"Error processing {feed_url}: {e}")
+            logger.error(f"Error processing {feed_url}: {e}", exc_info=True)
             errors.append({'url': feed_url, 'error': str(e)})
 
-    save_tweets(tweets)
-    save_cache_meta(cache_meta)
+    try:
+        save_tweets(tweets)
+        save_cache_meta(cache_meta)
+    except Exception as e:
+        logger.error(f"Error saving data: {e}", exc_info=True)
+        errors.append({'url': 'local', 'error': f'Data save error: {str(e)}'})
+
     logger.info(f"Cached {new_count} new tweets, total {len(tweets)}")
     return new_count, len(tweets), errors
 
